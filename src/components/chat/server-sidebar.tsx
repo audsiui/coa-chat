@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, Hash, MicOff, Plus, UserRoundPlus, Volume2 } from "lucide-react";
 import type { ChannelDTO, PublicUser, VoiceMember } from "@/lib/types";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 /** 服务器频道侧栏（文字频道 + 语音频道） */
 export function ServerSidebar({ me }: { me: PublicUser }) {
   const { detail, loading, error, refresh } = useServerData();
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   if (loading) {
     return (
@@ -61,14 +63,22 @@ export function ServerSidebar({ me }: { me: PublicUser }) {
           }
         />
         <DropdownMenuContent align="start" className="w-56">
-          <InviteDialog inviteCode={server.inviteCode} serverName={server.name}>
-            <DropdownMenuItem render={<button type="button" className="w-full" />}>
-              <UserRoundPlus className="size-4" />
-              邀请成员
-            </DropdownMenuItem>
-          </InviteDialog>
+          <DropdownMenuItem onClick={() => setInviteOpen(true)}>
+            <UserRoundPlus className="size-4" />
+            邀请成员
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* 弹窗必须渲染在菜单树之外：菜单关闭会卸载内容，嵌套触发器会被连带你掉 */}
+      {detail && (
+        <InviteDialog
+          inviteCode={detail.server.inviteCode}
+          serverName={detail.server.name}
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+        />
+      )}
 
       <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-2 py-3">
         <SectionLabel label="文字频道">

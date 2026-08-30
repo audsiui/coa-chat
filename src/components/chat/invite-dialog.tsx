@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { toast } from "sonner";
 import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,22 +9,21 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-/** 展示服务器邀请码并复制 */
+/** 展示服务器邀请码并复制（受控弹窗：由父级管理 open，触发器由父级渲染） */
 export function InviteDialog({
   inviteCode,
   serverName,
-  children,
+  open,
+  onOpenChange,
 }: {
   inviteCode: string;
   serverName: string;
-  children: React.ReactElement;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(inviteCode);
@@ -36,15 +34,19 @@ export function InviteDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={children} />
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>邀请加入 {serverName}</DialogTitle>
           <DialogDescription>把下面的邀请码发给同事或朋友</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Input readOnly value={inviteCode} className="font-mono" onFocus={(e) => e.target.select()} />
+          <Input
+            readOnly
+            value={inviteCode}
+            className="font-mono"
+            onFocus={(e) => e.target.select()}
+          />
           <Button variant="secondary" size="icon" aria-label="复制邀请码" onClick={() => void copy()}>
             <Copy />
           </Button>
