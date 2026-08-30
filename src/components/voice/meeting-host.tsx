@@ -99,6 +99,7 @@ export default function MeetingHost({
   camOn = false,
   onJoined,
   onLeft,
+  onJoinError,
   onControls,
   children,
 }: MeetingHostProps) {

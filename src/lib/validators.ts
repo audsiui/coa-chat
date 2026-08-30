@@ -80,6 +80,11 @@ export const micStateSchema = z.object({
   micOn: z.boolean(),
 });
 
+export const callStartSchema = z.object({
+  toUserId: z.string().uuid(),
+  kind: z.enum(["audio", "video"]),
+});
+
 export const paginationSchema = z.object({
   before: z.string().datetime().optional(),
   beforeId: z.string().uuid().optional(),

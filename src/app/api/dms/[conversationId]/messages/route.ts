@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { dmConversations, dmMessages, dmParticipants, users } from "@/db/schema";
 import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
@@ -26,7 +26,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
 
     const db = getDb();
-    const conditions = [
+    const conditions: (SQL<unknown> | undefined)[] = [
       eq(dmMessages.conversationId, conversationId),
       isNull(dmMessages.deletedAt),
     ];

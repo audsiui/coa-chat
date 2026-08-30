@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { messages, serverMembers, users } from "@/db/schema";
 import { ApiError, ok, parseJson, paramsOf, toErrorResponse } from "@/lib/api";
@@ -26,7 +26,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
 
     const db = getDb();
-    const conditions = [eq(messages.channelId, channelId), isNull(messages.deletedAt)];
+    const conditions: (SQL<unknown> | undefined)[] = [
+      eq(messages.channelId, channelId),
+      isNull(messages.deletedAt),
+    ];
     if (query.before) {
       const cursorAt = new Date(query.before);
       if (query.beforeId) {
