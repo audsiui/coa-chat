@@ -102,3 +102,19 @@ export type RtcRoomResult = {
   rtcConfigured: boolean;
   meetingId: string | null;
 };
+
+/* ---------------- 注册邀请 ---------------- */
+
+export type InviteDTO = {
+  id: string;
+  code: string;
+  usedAt: string | null;
+  usedBy: Pick<PublicUser, "username" | "displayName" | "avatarColor"> | null;
+  createdAt: string;
+};
+
+export type InvitesPayload = {
+  invites: InviteDTO[];
+  /** 配额：used = 已被使用的邀请数（即已邀请成功的人数），total = 上限 */
+  quota: { used: number; total: number };
+};

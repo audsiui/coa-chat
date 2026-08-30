@@ -124,3 +124,18 @@ export async function destroySession(): Promise<void> {
   }
   store.delete(SESSION_COOKIE);
 }
+
+/* ---------------- 注册邀请码 ---------------- */
+
+/** 邀请码字母表：去除易混淆的 0/O/1/I/L */
+const INVITE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/** 生成 8 位随机邀请码 */
+export function generateInviteCode(): string {
+  const bytes = randomBytes(8);
+  let code = "";
+  for (const byte of bytes) {
+    code += INVITE_ALPHABET[byte % INVITE_ALPHABET.length];
+  }
+  return code;
+}

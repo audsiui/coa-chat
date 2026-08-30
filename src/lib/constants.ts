@@ -1,5 +1,8 @@
 /** 全局常量 */
 
+/** 注册邀请制：每人最多可邀请的注册人数 */
+export const MAX_INVITES_PER_USER = 5;
+
 export const AVATAR_COLORS = [
   "#5865f2",
   "#3ba55c",

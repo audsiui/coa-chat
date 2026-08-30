@@ -9,6 +9,7 @@ export const registerSchema = z.object({
     .regex(/^[a-zA-Z0-9_]{2,20}$/, "用户名需为 2-20 位字母、数字或下划线"),
   password: z.string().min(8, "密码至少 8 位").max(72, "密码过长"),
   displayName: z.string().trim().min(1, "请填写昵称").max(24, "昵称最多 24 字"),
+  inviteCode: z.string().trim().min(4, "请输入有效的邀请码").max(20, "邀请码格式不正确"),
 });
 
 export const loginSchema = z.object({

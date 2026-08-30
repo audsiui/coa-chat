@@ -275,3 +275,27 @@ export const voiceStates = pgTable(
     index("voice_states_updated_idx").on(t.updatedAt),
   ],
 );
+
+/* ------------------------------------------------------------------ */
+/* 注册邀请码（邀请制注册：每人最多 MAX_INVITES_PER_USER 个名额）          */
+/* ------------------------------------------------------------------ */
+
+export const registrationInvites = pgTable(
+  "registration_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: text("code").notNull(),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    /** 使用者；删除账号后置空，邀请名额不回收（防滥用） */
+    usedById: uuid("used_by_id").references(() => users.id, { onDelete: "set null" }),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("registration_invites_code_key").on(t.code),
+    index("registration_invites_inviter_idx").on(t.inviterId),
+    check("registration_invites_code_format", sql`${t.code} ~ '^[A-Z0-9]{4,20}$'`),
+  ],
+);

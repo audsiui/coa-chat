@@ -16,6 +16,7 @@ export function AuthForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async (mode: "login" | "register") => {
@@ -27,6 +28,7 @@ export function AuthForm() {
           username: username.trim(),
           password,
           displayName: displayName.trim(),
+          inviteCode: inviteCode.trim().toUpperCase(),
         });
       } else {
         await api.post<MePayload>("/api/auth/login", {
@@ -138,9 +140,21 @@ export function AuthForm() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </Field>
+              <Field htmlFor="reg-invite-code" label="邀请码（向邀请人索取）">
+                <Input
+                  id="reg-invite-code"
+                  name="inviteCode"
+                  value={inviteCode}
+                  placeholder="XXXXXXXX"
+                  className="font-mono uppercase"
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                />
+              </Field>
               <Button
                 type="submit"
-                disabled={busy || !username.trim() || !displayName.trim() || password.length < 8}
+                disabled={
+                  busy || !username.trim() || !displayName.trim() || password.length < 8 || !inviteCode.trim()
+                }
               >
                 {busy ? "注册中…" : "创建账号"}
               </Button>

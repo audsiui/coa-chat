@@ -15,7 +15,7 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  init?: { method?: "GET" | "POST"; body?: unknown; keepalive?: boolean },
+  init?: { method?: "GET" | "POST" | "DELETE"; body?: unknown; keepalive?: boolean },
 ): Promise<T> {
   const res = await fetch(path, {
     method: init?.method ?? "GET",
@@ -48,6 +48,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown, opts?: { keepalive?: boolean }) =>
     request<T>(path, { method: "POST", body, keepalive: opts?.keepalive }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
 /** SWR 数据源：复用统一错误处理 */
