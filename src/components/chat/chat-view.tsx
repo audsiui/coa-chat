@@ -17,19 +17,12 @@ import {
   sameDay,
   shouldGroupWithPrevious,
 } from "@/lib/format";
+import { putMessages, removeMessage, useMessageEntry } from "@/lib/message-store";
 import { usePusherChannel } from "@/components/providers/pusher-provider";
-import type { PublicUser } from "@/lib/types";
+import type { ChatMessage, PublicUser } from "@/lib/types";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-export type ChatMessage = {
-  id: string;
-  content: string;
-  createdAt: string;
-  editedAt: string | null;
-  author: PublicUser;
-};
 
 type ChatViewProps = {
   me: PublicUser;
@@ -43,6 +36,10 @@ type ChatViewProps = {
   emptyHint?: string;
 };
 
+/**
+ * 消息视图：本地缓存秒开（IndexedDB）→ 打开时拉最新一页增量校准（按 id 合并）→
+ * 实时事件增量写入 → 发送乐观上屏。历史翻页合并不产生重复或缺口。
+ */
 export function ChatView({
   me,
   title,
@@ -54,9 +51,10 @@ export function ChatView({
   headerActions,
   emptyHint,
 }: ChatViewProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const entry = useMessageEntry(fetchUrl);
+  const messages = entry?.messages ?? [];
+  const hasMore = entry?.hasMore ?? true;
+  const [fetching, setFetching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -65,6 +63,10 @@ export function ChatView({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
   const loadingMoreRef = useRef(false);
+  const cacheRef = useRef(entry);
+  useEffect(() => {
+    cacheRef.current = entry;
+  });
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
@@ -72,24 +74,25 @@ export function ChatView({
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, []);
 
-  /* ---------------- 初始加载 ---------------- */
+  /* ---------------- 打开会话：缓存秒开 + 最新一页增量校准 ---------------- */
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setMessages([]);
+    setFetching(true);
     void (async () => {
       try {
         const data = await api.get<{ messages: ChatMessage[]; hasMore: boolean }>(fetchUrl);
         if (cancelled) return;
-        setMessages(data.messages);
-        setHasMore(data.hasMore);
+        putMessages(fetchUrl, data.messages, data.hasMore);
         nearBottomRef.current = true;
         requestAnimationFrame(() => scrollToBottom());
       } catch (e) {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : "加载消息失败");
+        // 无本地缓存时才提示错误（有缓存可离线浏览历史）
+        if (!cancelled && !cacheRef.current) {
+          toast.error(e instanceof Error ? e.message : "加载消息失败");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setFetching(false);
       }
     })();
     return () => {
@@ -97,7 +100,7 @@ export function ChatView({
     };
   }, [fetchUrl, scrollToBottom]);
 
-  /* ---------------- 向上翻页（保持视口锚点） ---------------- */
+  /* ---------------- 向上翻页（合并写回缓存，保持视口锚点） ---------------- */
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore || messages.length === 0) return;
@@ -108,8 +111,7 @@ export function ChatView({
       const oldest = messages[0]!;
       const url = `${fetchUrl}${fetchUrl.includes("?") ? "&" : "?"}before=${encodeURIComponent(oldest.createdAt)}`;
       const data = await api.get<{ messages: ChatMessage[]; hasMore: boolean }>(url);
-      setMessages((prev) => [...data.messages, ...prev]);
-      setHasMore(data.hasMore);
+      putMessages(fetchUrl, data.messages, data.hasMore);
       requestAnimationFrame(() => {
         const node = scrollRef.current;
         if (!node || !anchorId) return;
@@ -131,14 +133,14 @@ export function ChatView({
     if (el.scrollTop < 80) void loadMore();
   }, [loadMore]);
 
-  /* ---------------- 实时新消息 ---------------- */
+  /* ---------------- 实时新消息（增量写入缓存） ---------------- */
 
   const channel = usePusherChannel(realtimeChannel);
   useEffect(() => {
     if (!channel) return;
     const handler = (data: unknown) => {
       const msg = data as ChatMessage;
-      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      putMessages(fetchUrl, [msg]);
       requestAnimationFrame(() => {
         if (nearBottomRef.current) scrollToBottom(true);
       });
@@ -147,27 +149,44 @@ export function ChatView({
     return () => {
       channel.unbind(ev.messageNew, handler);
     };
-  }, [channel, scrollToBottom]);
+  }, [channel, fetchUrl, scrollToBottom]);
 
-  /* ---------------- 发送 ---------------- */
+  /* ---------------- 发送（乐观上屏） ---------------- */
 
   const send = useCallback(async () => {
     const content = draft.trim();
     if (!content || sending) return;
     setSending(true);
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const temp: ChatMessage = {
+      id: tempId,
+      content,
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+      author: {
+        id: me.id,
+        username: me.username,
+        displayName: me.displayName,
+        avatarColor: me.avatarColor,
+      },
+      pending: true,
+    };
+    putMessages(fetchUrl, [temp]);
+    setDraft("");
+    if (composerRef.current) composerRef.current.style.height = "auto";
+    nearBottomRef.current = true;
+    requestAnimationFrame(() => scrollToBottom(true));
     try {
       const msg = await api.post<ChatMessage>(sendUrl, { content });
-      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
-      setDraft("");
-      if (composerRef.current) composerRef.current.style.height = "auto";
-      nearBottomRef.current = true;
-      requestAnimationFrame(() => scrollToBottom(true));
+      removeMessage(fetchUrl, tempId);
+      putMessages(fetchUrl, [msg]);
     } catch (e) {
+      removeMessage(fetchUrl, tempId);
       toast.error(e instanceof Error ? e.message : "发送失败");
     } finally {
       setSending(false);
     }
-  }, [draft, sendUrl, sending, scrollToBottom]);
+  }, [draft, sendUrl, sending, scrollToBottom, fetchUrl, me]);
 
   /* ---------------- 渲染（日期分隔 + 连续消息分组） ---------------- */
 
@@ -192,6 +211,8 @@ export function ChatView({
       />,
     );
   });
+
+  const loading = fetching && !entry;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -285,7 +306,10 @@ function MessageRow({
 }) {
   if (grouped) {
     return (
-      <div data-mid={message.id} className="group relative pl-14">
+      <div
+        data-mid={message.id}
+        className={cn("group relative pl-14", message.pending && "opacity-50")}
+      >
         <span className="absolute top-1 left-0 hidden w-12 text-right text-[10px] text-muted-foreground group-hover:inline">
           {formatTime(message.createdAt)}
         </span>
@@ -294,7 +318,10 @@ function MessageRow({
     );
   }
   return (
-    <div data-mid={message.id} className={cn("mt-2 flex items-start gap-3 first:mt-0")}>
+    <div
+      data-mid={message.id}
+      className={cn("mt-2 flex items-start gap-3 first:mt-0", message.pending && "opacity-50")}
+    >
       <AvatarInitials
         name={message.author.displayName}
         color={message.author.avatarColor}
@@ -313,6 +340,7 @@ function MessageRow({
           </span>
           <span className="text-[11px] text-muted-foreground">
             {formatTime(message.createdAt)}
+            {message.pending && " · 发送中"}
           </span>
         </p>
         <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>

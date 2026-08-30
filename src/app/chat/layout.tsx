@@ -1,5 +1,6 @@
 import { requirePageUser } from "@/lib/rsc";
 import { pusherConfigured, rtcConfigured } from "@/lib/env";
+import { SwrPersistProvider } from "@/components/providers/swr-persist-provider";
 import { ChatShell } from "@/components/chat/chat-shell";
 
 /**
@@ -10,5 +11,11 @@ import { ChatShell } from "@/components/chat/chat-shell";
 export default async function ChatLayout({ children }: LayoutProps<"/chat">) {
   const user = await requirePageUser();
   const features = { pusher: pusherConfigured(), rtc: rtcConfigured() };
-  return <ChatShell user={user} features={features}>{children}</ChatShell>;
+  return (
+    <SwrPersistProvider>
+      <ChatShell user={user} features={features}>
+        {children}
+      </ChatShell>
+    </SwrPersistProvider>
+  );
 }

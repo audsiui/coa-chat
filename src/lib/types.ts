@@ -69,6 +69,17 @@ export type DmMessageDTO = {
   author: PublicUser;
 };
 
+/** 本地消息缓存中的消息（DTO + 乐观发送状态） */
+export type ChatMessage = {
+  id: string;
+  content: string;
+  createdAt: string;
+  editedAt: string | null;
+  author: PublicUser;
+  /** 乐观发送中（尚未收到服务端确认） */
+  pending?: boolean;
+};
+
 export type ConversationDTO = {
   id: string;
   createdAt: string;

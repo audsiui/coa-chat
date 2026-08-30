@@ -7,6 +7,7 @@ import { ev } from "@/lib/constants";
 import { swrFetcher } from "@/lib/client-api";
 import { useUserEvent } from "@/components/providers/pusher-provider";
 import { useUnread } from "@/hooks/use-unread";
+import { prefetchMessages } from "@/lib/message-store";
 import type { ConversationDTO, PublicUser } from "@/lib/types";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { StartDmDialog } from "./start-dm-dialog";
@@ -61,6 +62,9 @@ export function DmSidebar({ me }: { me: PublicUser }) {
               <li key={conv.id}>
                 <button
                   type="button"
+                  onMouseEnter={() =>
+                    void prefetchMessages(`/api/dms/${conv.id}/messages?limit=50`)
+                  }
                   onClick={() => router.push(`/chat/dm/${conv.id}`)}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5",

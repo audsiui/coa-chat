@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useVoice } from "@/components/voice/voice-provider";
 import { useUnread } from "@/hooks/use-unread";
+import { prefetchMessages } from "@/lib/message-store";
 import { cn } from "@/lib/utils";
 
 /** 服务器频道侧栏（文字频道 + 语音频道） */
@@ -133,6 +134,7 @@ function TextChannelItem({ channel, serverId }: { channel: ChannelDTO; serverId:
     <li>
       <button
         type="button"
+        onMouseEnter={() => void prefetchMessages(`/api/channels/${channel.id}/messages?limit=50`)}
         onClick={() => router.push(`/chat/server/${serverId}/${channel.id}`)}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm",
