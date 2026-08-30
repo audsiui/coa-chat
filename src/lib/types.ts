@@ -35,10 +35,20 @@ export type MemberDTO = PublicUser & {
   joinedAt: string;
 };
 
+export type VoiceStateDTO = {
+  userId: string;
+  channelId: string;
+  displayName: string;
+  avatarColor: string;
+  micOn: boolean;
+  updatedAt: string;
+};
+
 export type ServerDetail = {
   server: ServerSummary;
   channels: ChannelDTO[];
   members: MemberDTO[];
+  voiceStates: VoiceStateDTO[];
 };
 
 export type ChannelMessageDTO = {

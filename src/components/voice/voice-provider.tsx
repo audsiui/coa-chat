@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,8 +12,7 @@ import {
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { api } from "@/lib/client-api";
-import type { PublicUser, RtcRoomResult } from "@/lib/types";
-import { useVoicePresence } from "@/hooks/use-voice-presence";
+import type { PublicUser, RtcRoomResult, VoiceMember } from "@/lib/types";
 import type { MeetingControls } from "./meeting-host";
 
 const MeetingHost = dynamic(() => import("./meeting-host"), { ssr: false });
@@ -29,7 +29,7 @@ type VoiceContextValue = {
   channel: VoiceChannelRef | null;
   status: VoiceStatus;
   micOn: boolean;
-  members: ReturnType<typeof useVoicePresence>["members"];
+  members: VoiceMember[];
   join: (channel: VoiceChannelRef) => void;
   leave: () => void;
   toggleMic: () => void;
@@ -37,19 +37,55 @@ type VoiceContextValue = {
 
 const VoiceContext = createContext<VoiceContextValue | null>(null);
 
+const SYNC_INTERVAL_MS = 20_000;
+
 export function VoiceProvider({ me, children }: { me: PublicUser; children: React.ReactNode }) {
   const [channel, setChannel] = useState<VoiceChannelRef | null>(null);
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [micOn, setMicOn] = useState(true);
   const [meeting, setMeeting] = useState<{ meetingId: string; token: string } | null>(null);
+  /** 当前房间的占用名单：来自 /api/voice/sync（DB 权威 + 心跳刷新） */
+  const [roomMembers, setRoomMembers] = useState<VoiceMember[]>([]);
 
   const controlsRef = useRef<MeetingControls | null>(null);
   const busyRef = useRef(false);
+  const syncTimerRef = useRef<number | null>(null);
   // 主动离开/切换房间时置位：MeetingHost 卸载触发的 onLeft 不应被当作断连
   const suppressNextLeftRef = useRef(false);
 
-  // 在线名单：仅在已加入某个语音频道时订阅
-  const { members, broadcastMic } = useVoicePresence(channel?.id ?? null);
+  const stopSync = useCallback(() => {
+    if (syncTimerRef.current !== null) {
+      window.clearInterval(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+  }, []);
+
+  /** 心跳循环：保活状态行 + 拉取房间名单（20s） */
+  const startSync = useCallback((targetChannelId: string) => {
+    stopSync();
+    const tick = async () => {
+      try {
+        const r = await api.post<{ members: VoiceMember[] }>("/api/voice/sync", {
+          channelId: targetChannelId,
+        });
+        setRoomMembers(r.members);
+      } catch {
+        /* 网络抖动忽略，下个周期重试 */
+      }
+    };
+    void tick();
+    syncTimerRef.current = window.setInterval(() => void tick(), SYNC_INTERVAL_MS);
+  }, [stopSync]);
+
+  // 页面刷新/关闭时尽力通知离房（keepalive 保证送达）
+  useEffect(() => {
+    if (!channel) return;
+    const onHide = () => {
+      void api.post("/api/voice/leave", undefined, { keepalive: true });
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, [channel]);
 
   /* ---------------- 入会 / 离会 ---------------- */
 
@@ -69,6 +105,13 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
 
       void (async () => {
         try {
+          // 占用状态先落库（RTC 未配置时也保持"仅在线"占位语义）
+          const state = await api.post<{ members: VoiceMember[] }>("/api/voice/join", {
+            channelId: target.id,
+          });
+          setRoomMembers(state.members);
+          startSync(target.id);
+
           const room = await api.post<RtcRoomResult>("/api/rtc/rooms", {
             channelId: target.id,
           });
@@ -83,6 +126,10 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
             toast.info("VideoSDK 未配置：已进入仅在线模式（无实际音频）");
           }
         } catch (error) {
+          // 失败回滚：清状态行 + 停心跳
+          stopSync();
+          setRoomMembers([]);
+          void api.post("/api/voice/leave", undefined, { keepalive: true }).catch(() => {});
           setChannel(null);
           setStatus("error");
           toast.error(error instanceof Error ? error.message : "加入语音房失败");
@@ -91,17 +138,20 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
         }
       })();
     },
-    [channel],
+    [channel, startSync, stopSync],
   );
 
   const leave = useCallback(() => {
     suppressNextLeftRef.current = true;
     controlsRef.current?.leave();
     controlsRef.current = null;
+    stopSync();
+    void api.post("/api/voice/leave").catch(() => {});
     setMeeting(null);
     setChannel(null);
+    setRoomMembers([]);
     setStatus("idle");
-  }, []);
+  }, [stopSync]);
 
   // 意外断连兜底；主动离开已用 suppressNextLeftRef 抑制
   const handleMeetingLeft = useCallback(() => {
@@ -112,26 +162,34 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
       return;
     }
     if (channel) {
+      stopSync();
+      setRoomMembers([]);
+      void api.post("/api/voice/leave", undefined, { keepalive: true }).catch(() => {});
       setChannel(null);
       setStatus("error");
       toast.warning("语音连接已断开");
     }
-  }, [channel]);
+  }, [channel, stopSync]);
 
   const toggleMic = useCallback(() => {
     setMicOn((prev) => {
       const next = !prev;
       controlsRef.current?.toggleMic();
-      broadcastMic(next);
+      if (channel) {
+        void api.post("/api/voice/mic-state", { channelId: channel.id, micOn: next }).catch(() => {});
+        setRoomMembers((list) =>
+          list.map((m) => (m.id === me.id ? { ...m, micOn: next } : m)),
+        );
+      }
       return next;
     });
-  }, [broadcastMic]);
+  }, [me.id, channel]);
 
   /* ---------------- 上下文 ---------------- */
 
   const value = useMemo<VoiceContextValue>(
-    () => ({ channel, status, micOn, members, join, leave, toggleMic }),
-    [channel, status, micOn, members, join, leave, toggleMic],
+    () => ({ channel, status, micOn, members: roomMembers, join, leave, toggleMic }),
+    [channel, status, micOn, roomMembers, join, leave, toggleMic],
   );
 
   return (

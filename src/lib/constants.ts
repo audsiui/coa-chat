@@ -38,6 +38,7 @@ export const ev = {
   dmNew: "dm:new",
   dmRefresh: "dm:refresh",
   micState: "mic:state",
+  voiceStates: "voice:states",
   callIncoming: "call:incoming",
   callAccepted: "call:accepted",
   callRejected: "call:rejected",

@@ -4,6 +4,7 @@ import { channels, serverMembers, servers, users } from "@/db/schema";
 import { ApiError, ok, toErrorResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { assertServerMember } from "@/lib/access";
+import { listServerVoiceStates, sweepExpiredVoiceStates } from "@/lib/voice-state";
 import type { ServerDetail } from "@/lib/types";
 
 /** GET /api/servers/:serverId —— 服务器详情（频道 + 成员），仅成员可见 */
@@ -56,10 +57,22 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/servers/[server
       .where(eq(serverMembers.serverId, serverId))
       .orderBy(asc(serverMembers.joinedAt));
 
+    // 语音占用状态：静默清扫过期行后读取
+    await sweepExpiredVoiceStates();
+    const voiceStateRows = await listServerVoiceStates(serverId);
+
     const detail: ServerDetail = {
       server: { ...server, memberCount: memberRows.length },
       channels: channelRows,
       members: memberRows.map((m) => ({ ...m, joinedAt: m.joinedAt.toISOString() })),
+      voiceStates: voiceStateRows.map((r) => ({
+        userId: r.userId,
+        channelId: r.channelId,
+        displayName: r.displayName,
+        avatarColor: r.avatarColor,
+        micOn: r.micOn,
+        updatedAt: r.updatedAt.toISOString(),
+      })),
     };
     return ok(detail);
   } catch (error) {

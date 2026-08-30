@@ -15,13 +15,15 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  init?: { method?: "GET" | "POST"; body?: unknown },
+  init?: { method?: "GET" | "POST"; body?: unknown; keepalive?: boolean },
 ): Promise<T> {
   const res = await fetch(path, {
     method: init?.method ?? "GET",
     headers: init?.body !== undefined ? { "content-type": "application/json" } : undefined,
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
+    // 页面卸载（刷新/关闭）时的离开请求需要 keepalive 才能送达
+    keepalive: init?.keepalive,
   });
 
   let json: ApiEnvelope<T> | null = null;
@@ -44,7 +46,8 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
+  post: <T>(path: string, body?: unknown, opts?: { keepalive?: boolean }) =>
+    request<T>(path, { method: "POST", body, keepalive: opts?.keepalive }),
 };
 
 /** SWR 数据源：复用统一错误处理 */

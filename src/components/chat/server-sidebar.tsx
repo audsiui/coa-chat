@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useVoice } from "@/components/voice/voice-provider";
-import { useVoicePresence } from "@/hooks/use-voice-presence";
 import { cn } from "@/lib/utils";
 
 /** 服务器频道侧栏（文字频道 + 语音频道） */
@@ -155,7 +154,12 @@ function VoiceChannelItem({
 }) {
   const router = useRouter();
   const voice = useVoice();
-  const { members } = useVoicePresence(channel.id);
+  const { voiceStates } = useServerData();
+  // 名单来自 DB 占用状态（join/leave/心跳），不再订阅 presence
+  const members = voiceStates
+    .filter((s) => s.channelId === channel.id)
+    .map((s) => ({ id: s.userId, displayName: s.displayName, avatarColor: s.avatarColor, micOn: s.micOn }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, "zh"));
   const active = voice.channel?.id === channel.id;
 
   return (

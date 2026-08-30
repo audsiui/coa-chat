@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   pgEnum,
@@ -206,5 +207,32 @@ export const dmMessages = pgTable(
   (t) => [
     index("dm_messages_conversation_created_idx").on(t.conversationId, t.createdAt.desc()),
     check("dm_messages_content_length", sql`char_length(${t.content}) BETWEEN 1 AND 4000`),
+  ],
+);
+
+/* ------------------------------------------------------------------ */
+/* 语音房占用状态（谁在哪个语音频道）                                    */
+/* 每用户至多一行（主键 user_id）；靠心跳保活，超时由服务端清扫          */
+/* ------------------------------------------------------------------ */
+
+export const voiceStates = pgTable(
+  "voice_states",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    micOn: boolean("mic_on").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("voice_states_server_idx").on(t.serverId),
+    index("voice_states_channel_idx").on(t.channelId),
+    index("voice_states_updated_idx").on(t.updatedAt),
   ],
 );

@@ -63,6 +63,23 @@ export const rtcTokenSchema = z.object({
   meetingId: z.string().min(1, "缺少 meetingId"),
 });
 
+export const voiceJoinSchema = z.object({
+  channelId: z.string().uuid(),
+});
+
+export const voiceSyncSchema = z.object({
+  channelId: z.string().uuid(),
+});
+
+export const voiceLeaveSchema = z.object({
+  channelId: z.string().uuid().optional(),
+});
+
+export const micStateSchema = z.object({
+  channelId: z.string().uuid(),
+  micOn: z.boolean(),
+});
+
 export const callStartSchema = z.object({
   toUserId: z.string().uuid(),
   kind: z.enum(["audio", "video"]),
