@@ -113,7 +113,9 @@ export default function MeetingHost({
         webcamEnabled: initial.webcamEnabled,
         name: displayName,
         mode: "SEND_AND_RECV",
-        multiStream: false,
+        // 多分辨率层（simulcast）：participant.setQuality 的前置条件，
+        // 官方文档明确 multiStream=false 时 setQuality 无效
+        multiStream: true,
         debugMode: false,
       }}
       token={token}
