@@ -5,6 +5,7 @@ import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
 import { assertServerMember } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { isUniqueViolation } from "@/lib/pg";
+import { rateLimit } from "@/lib/rate-limit";
 import { createChannelSchema } from "@/lib/validators";
 
 /** POST /api/servers/:serverId/channels —— 创建频道（成员即可创建，后续可收紧为管理员） */
@@ -16,6 +17,9 @@ export async function POST(
     const me = await requireUser();
     const { serverId } = await ctx.params;
     await assertServerMember(serverId, me.id);
+    if (!rateLimit(`channel-create:${me.id}`, 10, 60_000)) {
+      throw new ApiError(429, "RATE_LIMITED", "创建太频繁，请稍后再试");
+    }
     const body = await parseJson(req, createChannelSchema);
     const db = getDb();
 

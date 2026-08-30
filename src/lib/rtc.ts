@@ -16,11 +16,16 @@ function secretKey(): Uint8Array {
   return new TextEncoder().encode(env.videosdk.secret);
 }
 
-export async function createRtcToken(): Promise<string> {
+/**
+ * 生成入会 JWT。传入 roomId 时令牌与房间绑定（只能进该房间），
+ * 且不授予管理权限——普通参与者无需 allow_mod。
+ */
+export async function createRtcToken(roomId?: string): Promise<string> {
   return new SignJWT({
     apikey: env.videosdk.apiKey,
-    permissions: ["allow_join", "allow_mod"],
+    permissions: ["allow_join"],
     version: 2,
+    ...(roomId ? { roomId } : {}),
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()

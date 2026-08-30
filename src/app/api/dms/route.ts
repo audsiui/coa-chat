@@ -5,6 +5,7 @@ import { dmConversations, dmParticipants, users } from "@/db/schema";
 import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { ch, ev } from "@/lib/constants";
+import { rateLimit } from "@/lib/rate-limit";
 import { triggerSafely } from "@/lib/pusher";
 import { openDmSchema } from "@/lib/validators";
 import type { ConversationDTO } from "@/lib/types";
@@ -113,6 +114,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const me = await requireUser();
+    if (!rateLimit(`dm-open:${me.id}`, 20, 60_000)) {
+      throw new ApiError(429, "RATE_LIMITED", "操作太频繁，请稍后再试");
+    }
     const body = await parseJson(req, openDmSchema);
     const db = getDb();
 
@@ -153,34 +157,56 @@ export async function POST(req: Request) {
       } satisfies ConversationDTO);
     }
 
-    const conversation = await db.transaction(async (tx) => {
-      const created = await tx
+    // pairKey 唯一索引：并发双方同时建会话时只保留一个，另一方回读既有会话
+    const pairKey = [me.id, body.userId].sort().join(":");
+
+    const { conversation, created } = await db.transaction(async (tx) => {
+      const inserted = await tx
         .insert(dmConversations)
-        .values({})
+        .values({ pairKey })
+        .onConflictDoNothing({ target: dmConversations.pairKey })
         .returning({
           id: dmConversations.id,
           createdAt: dmConversations.createdAt,
           lastMessageAt: dmConversations.lastMessageAt,
         });
-      const conv = created[0]!;
 
-      await tx.insert(dmParticipants).values([
-        { conversationId: conv.id, userId: me.id },
-        { conversationId: conv.id, userId: peer.id },
-      ]);
+      if (inserted[0]) {
+        const conv = inserted[0];
+        await tx.insert(dmParticipants).values([
+          { conversationId: conv.id, userId: me.id },
+          { conversationId: conv.id, userId: peer.id },
+        ]);
+        return {
+          conversation: conv,
+          created: true as const,
+        };
+      }
 
-      return conv;
+      const rows = await tx
+        .select({
+          id: dmConversations.id,
+          createdAt: dmConversations.createdAt,
+          lastMessageAt: dmConversations.lastMessageAt,
+        })
+        .from(dmConversations)
+        .where(eq(dmConversations.pairKey, pairKey))
+        .limit(1);
+      if (!rows[0]) throw new ApiError(500, "DM_RACE", "会话创建异常，请重试");
+      return { conversation: rows[0], created: false as const };
     });
 
-    await triggerSafely(ch.user(peer.id), ev.dmNew, {
-      conversationId: conversation.id,
-      user: {
-        id: me.id,
-        username: me.username,
-        displayName: me.displayName,
-        avatarColor: me.avatarColor,
-      },
-    });
+    if (created) {
+      await triggerSafely(ch.user(peer.id), ev.dmNew, {
+        conversationId: conversation.id,
+        user: {
+          id: me.id,
+          username: me.username,
+          displayName: me.displayName,
+          avatarColor: me.avatarColor,
+        },
+      });
+    }
 
     return ok(
       {
@@ -190,7 +216,7 @@ export async function POST(req: Request) {
         peer,
         lastMessage: null,
       } satisfies ConversationDTO,
-      201,
+      created ? 201 : 200,
     );
   } catch (error) {
     return toErrorResponse(error);

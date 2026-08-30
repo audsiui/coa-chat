@@ -47,11 +47,10 @@ export function usePresenceMembers(channelName: string | null): {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!channel) {
-      setMembers([]);
-      setReady(false);
-      return;
-    }
+    // 切换频道时立即复位，避免上一频道的成员串显
+    setMembers([]);
+    setReady(false);
+    if (!channel) return;
 
     const seed = () => {
       const like = channel as unknown as PresenceChannelLike;

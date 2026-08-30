@@ -17,7 +17,12 @@ import {
   sameDay,
   shouldGroupWithPrevious,
 } from "@/lib/format";
-import { putMessages, removeMessage, useMessageEntry } from "@/lib/message-store";
+import {
+  putMessages,
+  removeMessage,
+  removePendingMatch,
+  useMessageEntry,
+} from "@/lib/message-store";
 import { usePusher, usePusherChannel } from "@/components/providers/pusher-provider";
 import type { ChatMessage, PublicUser } from "@/lib/types";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
@@ -143,6 +148,8 @@ export function ChatView({
     if (!channel) return;
     const handler = (data: unknown) => {
       const msg = data as ChatMessage;
+      // 自己的消息：推送确认通常先于 HTTP 响应到达——先清同内容乐观占位，避免双显
+      if (msg.author.id === me.id) removePendingMatch(fetchUrl, me.id, msg.content);
       putMessages(fetchUrl, [msg]);
       requestAnimationFrame(() => {
         if (nearBottomRef.current) scrollToBottom(true);
@@ -152,7 +159,7 @@ export function ChatView({
     return () => {
       channel.unbind(ev.messageNew, handler);
     };
-  }, [channel, fetchUrl, scrollToBottom]);
+  }, [channel, fetchUrl, scrollToBottom, me.id]);
 
   // Pusher 断线重连后补拉最新一页（掉线期间推送丢失的消息由按 id 合并自动补齐）
   const pusher = usePusher();

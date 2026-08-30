@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { dmConversations, dmMessages, dmParticipants, users } from "@/db/schema";
 import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
@@ -30,7 +30,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       eq(dmMessages.conversationId, conversationId),
       isNull(dmMessages.deletedAt),
     ];
-    if (query.before) conditions.push(lt(dmMessages.createdAt, new Date(query.before)));
+    if (query.before) {
+      // 同频道消息路由：lte 防同毫秒截断，客户端按 id 去重
+      conditions.push(lte(dmMessages.createdAt, new Date(query.before)));
+    }
 
     const rows = await db
       .select({

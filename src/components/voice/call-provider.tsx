@@ -133,6 +133,21 @@ export function CallProvider({ me, children }: { me: PublicUser; children: React
     return () => window.clearTimeout(timer);
   }, [call?.phase, call?.role, call?.callId, clear]);
 
+  /* ---------------- 接通超时：对端取消/信令丢失时收尾 ---------------- */
+
+  useEffect(() => {
+    if (call?.phase !== "connecting") return;
+    const timer = window.setTimeout(() => {
+      const c = callRef.current;
+      if (c?.phase !== "connecting") return;
+      toast.info("对方未能接通，通话已结束");
+      void api.post(`/api/calls/${c.callId}/end`, { peerUserId: c.peer.id }).catch(() => {});
+      controlsRef.current?.leave();
+      clear();
+    }, 30_000);
+    return () => window.clearTimeout(timer);
+  }, [call?.phase, call?.callId, clear]);
+
   /* ---------------- 接通后取入会 token ---------------- */
 
   useEffect(() => {

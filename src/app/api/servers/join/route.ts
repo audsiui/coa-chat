@@ -3,12 +3,16 @@ import { getDb } from "@/db";
 import { serverMembers, servers } from "@/db/schema";
 import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 import { joinServerSchema } from "@/lib/validators";
 
-/** POST /api/servers/join —— 凭邀请码加入服务器（幂等） */
+/** POST /api/servers/join —— 凭邀请码加入服务器（幂等；限频防邀请码爆破） */
 export async function POST(req: Request) {
   try {
     const me = await requireUser();
+    if (!rateLimit(`server-join:${me.id}`, 10, 60_000)) {
+      throw new ApiError(429, "RATE_LIMITED", "尝试太频繁，请稍后再试");
+    }
     const body = await parseJson(req, joinServerSchema);
     const db = getDb();
 

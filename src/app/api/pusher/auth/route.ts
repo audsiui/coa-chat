@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { getDb } from "@/db";
 import { channels, dmParticipants, serverMembers } from "@/db/schema";
 import { ApiError, toErrorResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { pusherAuthEndpointPayload } from "@/lib/pusher";
 import { pusherConfigured } from "@/lib/env";
+
+const uuidSchema = z.string().uuid();
+
+function channelIdFrom(channelName: string, prefix: string): string {
+  const suffix = channelName.slice(prefix.length);
+  const parsed = uuidSchema.safeParse(suffix);
+  if (!parsed.success) throw new ApiError(400, "BAD_CHANNEL", "频道名不合法");
+  return parsed.data;
+}
 
 /**
  * Pusher 私有/在线频道鉴权端点。
@@ -75,12 +85,18 @@ export async function POST(req: Request) {
     } else if (channelName.startsWith("private-dm-")) {
       await assertConversationParticipant(channelName.slice("private-dm-".length), user.id);
     } else if (channelName.startsWith("private-channel-")) {
-      await assertChannelInMemberServer(channelName.slice("private-channel-".length), user.id);
+      await assertChannelInMemberServer(
+        channelIdFrom(channelName, "private-channel-"),
+        user.id,
+      );
     } else if (channelName.startsWith("presence-server-")) {
       await assertServerMember(channelName.slice("presence-server-".length), user.id);
       presence = { user_id: user.id, user_info: { displayName: user.displayName, avatarColor: user.avatarColor } };
     } else if (channelName.startsWith("presence-voice-")) {
-      await assertChannelInMemberServer(channelName.slice("presence-voice-".length), user.id);
+      await assertChannelInMemberServer(
+        channelIdFrom(channelName, "presence-voice-"),
+        user.id,
+      );
       presence = { user_id: user.id, user_info: { displayName: user.displayName, avatarColor: user.avatarColor } };
     } else {
       throw new ApiError(403, "FORBIDDEN", "不支持的频道类型");

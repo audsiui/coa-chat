@@ -196,11 +196,17 @@ export const dmReadStates = pgTable(
 /* 私聊（1 对 1，参与人表设计预留将来扩展群聊）                          */
 /* ------------------------------------------------------------------ */
 
-export const dmConversations = pgTable("dm_conversations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
-});
+export const dmConversations = pgTable(
+  "dm_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 双方 userId 排序拼接的唯一键：数据库层面防并发重复建会话（历史行为 NULL，不受约束） */
+    pairKey: text("pair_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("dm_conversations_pair_key_key").on(t.pairKey)],
+);
 
 export const dmParticipants = pgTable(
   "dm_participants",

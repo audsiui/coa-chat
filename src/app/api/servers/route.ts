@@ -2,9 +2,10 @@ import { randomBytes } from "node:crypto";
 import { count, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { channels, serverMembers, servers } from "@/db/schema";
-import { ok, parseJson, toErrorResponse } from "@/lib/api";
+import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { pickIconColor } from "@/lib/constants";
+import { rateLimit } from "@/lib/rate-limit";
 import { createServerSchema } from "@/lib/validators";
 
 /** GET /api/servers —— 我的服务器列表（含成员数） */
@@ -47,6 +48,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const me = await requireUser();
+    if (!rateLimit(`server-create:${me.id}`, 5, 60_000)) {
+      return toErrorResponse(new ApiError(429, "RATE_LIMITED", "创建太频繁，请稍后再试"));
+    }
     const body = await parseJson(req, createServerSchema);
     const db = getDb();
 

@@ -142,6 +142,11 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
               }
               return next;
             });
+            // 当前打开的会话重连后立即重新标记已读（离线期间已读上报可能失败，
+            // 避免快照把红点"复活"到正在看的会话上）
+            const { channelId, dmId } = activeRef.current;
+            if (channelId) markChannelRead(channelId);
+            if (dmId) markDmRead(dmId);
           } catch {
             /* 静默，下次重连或刷新自愈 */
           }
@@ -153,7 +158,7 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
     return () => {
       pusher.connection.unbind("state_change", onStateChange);
     };
-  }, [pusher]);
+  }, [pusher, markChannelRead, markDmRead]);
 
   // 频道新消息通知
   useUserEvent<{ channelId: string; serverId: string }>(ev.channelNotify, (d) => {

@@ -75,7 +75,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
     };
     void tick();
     syncTimerRef.current = window.setInterval(() => void tick(), SYNC_INTERVAL_MS);
-  }, [stopSync]);
+  }, [markSuppressed, stopSync]);
 
   // 页面刷新/关闭时尽力通知离房（keepalive 保证送达）
   useEffect(() => {
@@ -87,6 +87,25 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
     return () => window.removeEventListener("pagehide", onHide);
   }, [channel]);
 
+  const suppressTimerRef = useRef<number | null>(null);
+  const markSuppressed = useCallback(() => {
+    suppressNextLeftRef.current = true;
+    // 兜底清除：若卸载清理未触发 meeting-left，避免标记泄漏吞掉真实断连
+    if (suppressTimerRef.current !== null) window.clearTimeout(suppressTimerRef.current);
+    suppressTimerRef.current = window.setTimeout(() => {
+      suppressNextLeftRef.current = false;
+      suppressTimerRef.current = null;
+    }, 5000);
+  }, []);
+
+  // 布局卸载（退出登录等）：停心跳并尽力离房，防止幽灵占用
+  useEffect(() => {
+    return () => {
+      stopSync();
+      void api.post("/api/voice/leave", undefined, { keepalive: true }).catch(() => {});
+    };
+  }, [stopSync]);
+
   /* ---------------- 入会 / 离会 ---------------- */
 
   const join = useCallback(
@@ -96,7 +115,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
       busyRef.current = true;
 
       // 切换房间：标记主动离开，清掉旧状态（MeetingHost 卸载时自动退会）
-      suppressNextLeftRef.current = true;
+      markSuppressed();
       controlsRef.current = null;
       setMeeting(null);
       setChannel(target);
@@ -142,7 +161,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
   );
 
   const leave = useCallback(() => {
-    suppressNextLeftRef.current = true;
+    markSuppressed();
     controlsRef.current?.leave();
     controlsRef.current = null;
     stopSync();
@@ -151,7 +170,8 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
     setChannel(null);
     setRoomMembers([]);
     setStatus("idle");
-  }, [stopSync]);
+  }, [markSuppressed, stopSync]);
+
 
   // 意外断连兜底；主动离开已用 suppressNextLeftRef 抑制
   const handleMeetingLeft = useCallback(() => {
@@ -172,18 +192,16 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
   }, [channel, stopSync]);
 
   const toggleMic = useCallback(() => {
-    setMicOn((prev) => {
-      const next = !prev;
-      controlsRef.current?.toggleMic();
-      if (channel) {
-        void api.post("/api/voice/mic-state", { channelId: channel.id, micOn: next }).catch(() => {});
-        setRoomMembers((list) =>
-          list.map((m) => (m.id === me.id ? { ...m, micOn: next } : m)),
-        );
-      }
-      return next;
-    });
-  }, [me.id, channel]);
+    const next = !micOn;
+    setMicOn(next);
+    controlsRef.current?.toggleMic();
+    if (channel) {
+      void api.post("/api/voice/mic-state", { channelId: channel.id, micOn: next }).catch(() => {});
+      setRoomMembers((list) =>
+        list.map((m) => (m.id === me.id ? { ...m, micOn: next } : m)),
+      );
+    }
+  }, [me.id, channel, micOn]);
 
   /* ---------------- 上下文 ---------------- */
 

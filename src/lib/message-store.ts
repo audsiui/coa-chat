@@ -150,6 +150,24 @@ export function removeMessage(key: string, id: string): void {
   });
 }
 
+/**
+ * 移除指定作者的乐观占位（推送确认通常先于 HTTP 响应到达时清理，避免双显）。
+ */
+export function removePendingMatch(key: string, authorId: string, content: string): void {
+  hydrate();
+  const cur = store.get(key);
+  if (!cur) return;
+  const idx = cur.messages.findIndex(
+    (m) => m.pending && m.author.id === authorId && m.content === content,
+  );
+  if (idx === -1) return;
+  setEntry(key, {
+    messages: cur.messages.filter((_, i) => i !== idx),
+    hasMore: cur.hasMore,
+    lastAccess: Date.now(),
+  });
+}
+
 function getSnapshot(key: string): Entry | undefined {
   return store.get(key);
 }

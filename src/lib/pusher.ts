@@ -22,21 +22,22 @@ function getPusher(): Pusher | null {
 /**
  * 触发实时事件。未配置 Pusher 时只打日志不抛错——
  * 文字链路降级为"发送方可见"，避免整站不可用。
+ * channel 支持 string（单频道）或 string[]（批量，单次 ≤100）。
  */
 export async function triggerSafely(
-  channel: string,
+  channel: string | string[],
   event: string,
   data: unknown,
 ): Promise<void> {
   const p = getPusher();
   if (!p) {
-    console.warn(`[pusher] 未配置，跳过触发 ${event} @ ${channel}`);
+    console.warn(`[pusher] 未配置，跳过触发 ${event} @ ${Array.isArray(channel) ? channel.length + " 频道" : channel}`);
     return;
   }
   try {
     await p.trigger(channel, event, data);
   } catch (error) {
-    console.error(`[pusher] 触发失败 ${event} @ ${channel}:`, error);
+    console.error(`[pusher] 触发失败 ${event}:`, error);
   }
 }
 

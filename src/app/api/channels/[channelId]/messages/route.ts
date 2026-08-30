@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { messages, serverMembers, users } from "@/db/schema";
 import { ApiError, ok, parseJson, paramsOf, toErrorResponse } from "@/lib/api";
@@ -27,7 +27,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
 
     const db = getDb();
     const conditions = [eq(messages.channelId, channelId), isNull(messages.deletedAt)];
-    if (query.before) conditions.push(lt(messages.createdAt, new Date(query.before)));
+    if (query.before) {
+      // lte 而非 lt：同毫秒消息不因游标截断丢失，客户端按 id 合并去重
+      conditions.push(lte(messages.createdAt, new Date(query.before)));
+    }
 
     const rows = await db
       .select({
@@ -104,14 +107,18 @@ export async function POST(req: Request, ctx: RouteCtx) {
 
     await triggerSafely(ch.channel(channelId), ev.messageNew, message);
 
-    // 未读通知：发给该服务器所有成员（除作者）的轻量事件；正在看该频道/离线的人由客户端与服务端水位自愈
+    // 未读通知：发给该服务器所有成员（除作者）的轻量事件；
+    // 批量触发（单次 ≤90 频道），避免大服务器串行 REST 调用
     const memberRows = await db
       .select({ userId: serverMembers.userId })
       .from(serverMembers)
       .where(eq(serverMembers.serverId, channel.serverId));
-    for (const member of memberRows) {
-      if (member.userId === me.id) continue;
-      await triggerSafely(ch.user(member.userId), ev.channelNotify, {
+    const myChannel = ch.user(me.id);
+    const targets = memberRows
+      .map((m) => ch.user(m.userId))
+      .filter((target) => target !== myChannel);
+    for (let i = 0; i < targets.length; i += 90) {
+      await triggerSafely(targets.slice(i, i + 90), ev.channelNotify, {
         channelId,
         serverId: channel.serverId,
         messageId: message.id,

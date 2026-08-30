@@ -38,9 +38,13 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
   return true;
 }
 
-/** 从请求头提取客户端 IP（生产环境在反代处设置 x-forwarded-for） */
+/** 从请求头提取客户端 IP。取最后一跳：反向代理（Vercel/网关）会把真实客户端
+ * 追加到末尾，取最左侧则可被伪造头绕过限流 */
 export function clientIp(req: Request): string {
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
+  if (fwd) {
+    const hops = fwd.split(",");
+    return hops[hops.length - 1].trim();
+  }
   return req.headers.get("x-real-ip") ?? "unknown";
 }

@@ -17,19 +17,21 @@ export function PusherProvider({
   const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
   const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
 
-  const client = useMemo(() => {
-    if (!key || !cluster) return null;
-    return new Pusher(key, {
+  // 客户端在 effect 中创建（render 期间建 WebSocket 属副作用，StrictMode 会泄漏一个实例）
+  const [client, setClient] = useState<Pusher | null>(null);
+  useEffect(() => {
+    if (!key || !cluster) return;
+    const c = new Pusher(key, {
       cluster,
       authEndpoint: "/api/pusher/auth",
       // 会话 Cookie 同源自动携带
       auth: { params: {} },
     });
+    setClient(c);
+    return () => {
+      c.disconnect();
+    };
   }, [key, cluster]);
-
-  useEffect(() => {
-    return () => client?.disconnect();
-  }, [client]);
 
   return (
     <PusherContext.Provider value={client}>
@@ -42,7 +44,14 @@ export function usePusher(): Pusher | null {
   return useContext(PusherContext);
 }
 
-/** 订阅/退订生命周期封装 */
+/**
+ * 订阅/退订生命周期封装。
+ * pusher-js 的 unsubscribe 会无条件销毁共享频道对象（无引用计数）——
+ * 多个组件订阅同一频道时，先卸载的组件会把后订阅者的事件一起杀掉。
+ * 这里按频道名引用计数，仅在最后一个订阅者离开时才真正退订。
+ */
+const channelRefCounts = new Map<string, number>();
+
 export function usePusherChannel(channelName: string | null): Channel | null {
   const pusher = usePusher();
   const [channel, setChannel] = useState<Channel | null>(null);
@@ -53,9 +62,16 @@ export function usePusherChannel(channelName: string | null): Channel | null {
       return;
     }
     const ch = pusher.subscribe(channelName);
+    channelRefCounts.set(channelName, (channelRefCounts.get(channelName) ?? 0) + 1);
     setChannel(ch);
     return () => {
-      pusher.unsubscribe(channelName);
+      const remaining = (channelRefCounts.get(channelName) ?? 1) - 1;
+      if (remaining <= 0) {
+        channelRefCounts.delete(channelName);
+        pusher.unsubscribe(channelName);
+      } else {
+        channelRefCounts.set(channelName, remaining);
+      }
       setChannel(null);
     };
   }, [pusher, channelName]);
