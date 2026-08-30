@@ -75,7 +75,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
     };
     void tick();
     syncTimerRef.current = window.setInterval(() => void tick(), SYNC_INTERVAL_MS);
-  }, [markSuppressed, stopSync]);
+  }, [stopSync]);
 
   // 页面刷新/关闭时尽力通知离房（keepalive 保证送达）
   useEffect(() => {
