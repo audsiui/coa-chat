@@ -157,7 +157,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
         }
       })();
     },
-    [channel, startSync, stopSync],
+    [channel, startSync, stopSync, markSuppressed],
   );
 
   const leave = useCallback(() => {
