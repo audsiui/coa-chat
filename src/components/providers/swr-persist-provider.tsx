@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { SWRConfig } from "swr";
+import { SWRConfig, type Cache } from "swr";
 
 /**
  * SWR 缓存持久化：
@@ -76,9 +76,10 @@ export function SwrPersistProvider({ children }: { children: React.ReactNode }) 
     <SWRConfig
       value={{
         keepPreviousData: true,
-        provider: () => {
+        provider: (): Cache => {
           hydrate();
-          return {
+          // SWR 内部 State 结构对本层透明（只做存取转发 + 持久化钩子）
+          const cache = {
             keys: () => memory.keys(),
             get: (key: string) => memory.get(key),
             set: (key: string, value: unknown) => {
@@ -90,6 +91,7 @@ export function SwrPersistProvider({ children }: { children: React.ReactNode }) 
               schedulePersist();
             },
           };
+          return cache as unknown as Cache;
         },
       }}
     >
