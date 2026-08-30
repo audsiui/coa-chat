@@ -94,18 +94,19 @@ export function ServerDataProvider({
     return () => window.clearInterval(timer);
   }, []);
 
-  const value = useMemo<ServerDataValue>(
-    () => ({
-      detail: data ?? null,
+  const value = useMemo<ServerDataValue>(() => {
+    // keepPreviousData 会让切换服务器时短暂返回上一台服务器的数据——按 id 匹配防串显
+    const matched = data && data.server.id === serverId ? data : null;
+    return {
+      detail: matched,
       loading: isLoading,
       error: error instanceof Error ? error.message : null,
       refresh: async () => {
         await mutate();
       },
-      voiceStates,
-    }),
-    [data, isLoading, error, mutate, voiceStates],
-  );
+      voiceStates: matched ? voiceStates : [],
+    };
+  }, [data, isLoading, error, mutate, serverId, voiceStates]);
 
   return <ServerDataContext.Provider value={value}>{children}</ServerDataContext.Provider>;
 }

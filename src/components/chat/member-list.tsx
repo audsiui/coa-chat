@@ -22,7 +22,16 @@ export function MemberList({ me }: { me: PublicUser }) {
     return ids;
   }, [presenceMembers, ready, me.id]);
 
-  if (!detail) return null;
+  if (!detail) {
+    // 详情加载中：保持列宽渲染骨架行，避免主区域宽度跳变
+    return (
+      <aside className="scrollbar-slim hidden w-56 shrink-0 overflow-y-auto bg-sidebar px-3 py-4 lg:block">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="mb-1 h-8 animate-pulse rounded-md bg-accent" />
+        ))}
+      </aside>
+    );
+  }
 
   const { members } = detail;
   const online = members.filter((m) => onlineIds.has(m.id));

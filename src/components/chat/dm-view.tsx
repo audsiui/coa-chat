@@ -23,10 +23,13 @@ export function DmView({
 }) {
   const router = useRouter();
   const call = useCall();
-  const { data: conversation, error, isLoading, mutate } = useSWR<ConversationDTO>(
+  const { data: conversationData, error, isLoading, mutate } = useSWR<ConversationDTO>(
     `/api/dms/${conversationId}`,
     swrFetcher,
   );
+  // keepPreviousData 防串显：切换会话时旧会话数据不透传
+  const conversation =
+    conversationData && conversationData.id === conversationId ? conversationData : null;
 
   // 首条消息先于会话元数据到达时，借事件刷新头部信息
   useUserEvent<{ conversationId: string }>(ev.dmRefresh, (d) => {
