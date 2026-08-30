@@ -46,23 +46,24 @@ export function ChatShell({
     <PusherProvider userId={user.id}>
       <VoiceProvider me={user}>
         <CallProvider me={user}>
-          <div className="flex h-dvh w-full overflow-hidden">
-            <ServerRail me={user} activeServerId={activeServerId} />
-            <div className="flex w-60 shrink-0 flex-col bg-sidebar">
-              <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto">
-                {activeServerId ? (
-                  <ServerDataProvider serverId={activeServerId}>
+          {/* Provider 必须同时覆盖侧栏与 main 区域——页面组件也消费 useServerData */}
+          <ServerDataProvider serverId={activeServerId}>
+            <div className="flex h-dvh w-full overflow-hidden">
+              <ServerRail me={user} activeServerId={activeServerId} />
+              <div className="flex w-60 shrink-0 flex-col bg-sidebar">
+                <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto">
+                  {activeServerId ? (
                     <ServerSidebar me={user} />
-                  </ServerDataProvider>
-                ) : (
-                  <DmSidebar me={user} />
-                )}
+                  ) : (
+                    <DmSidebar me={user} />
+                  )}
+                </div>
+                <VoicePanel />
+                <UserPanel me={user} />
               </div>
-              <VoicePanel />
-              <UserPanel me={user} />
+              <main className="flex min-w-0 flex-1 flex-col">{children}</main>
             </div>
-            <main className="flex min-w-0 flex-1 flex-col">{children}</main>
-          </div>
+          </ServerDataProvider>
         </CallProvider>
       </VoiceProvider>
     </PusherProvider>
