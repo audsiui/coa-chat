@@ -1,46 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Crown } from "lucide-react";
-import { usePusherChannel } from "@/components/providers/pusher-provider";
 import { ch } from "@/lib/constants";
+import { usePresenceMembers } from "@/hooks/use-presence-members";
 import { useServerData } from "./server-data-provider";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
+import type { PublicUser } from "@/lib/types";
 
 /** 服务器成员列表：在线（presence 实时）/ 离线分组 */
-export function MemberList() {
+export function MemberList({ me }: { me: PublicUser }) {
   const { detail } = useServerData();
-  const presenceChannel = usePusherChannel(detail ? ch.server(detail.server.id) : null);
-  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+  const { members: presenceMembers, ready } = usePresenceMembers(
+    detail ? ch.server(detail.server.id) : null,
+  );
 
-  const handlePresence = useCallback((fn: (ids: Set<string>) => Set<string>) => {
-    setOnlineIds((prev) => fn(prev));
-  }, []);
-
-  useEffect(() => {
-    if (!presenceChannel) {
-      setOnlineIds(new Set());
-      return;
-    }
-    const onAdded = (data: unknown) => {
-      const d = data as { id: string };
-      handlePresence((ids) => new Set(ids).add(d.id));
-    };
-    const onRemoved = (data: unknown) => {
-      const d = data as { id: string };
-      handlePresence((ids) => {
-        const next = new Set(ids);
-        next.delete(d.id);
-        return next;
-      });
-    };
-    presenceChannel.bind("pusher:member_added", onAdded);
-    presenceChannel.bind("pusher:member_removed", onRemoved);
-    return () => {
-      presenceChannel.unbind("pusher:member_added", onAdded);
-      presenceChannel.unbind("pusher:member_removed", onRemoved);
-    };
-  }, [presenceChannel, handlePresence]);
+  const onlineIds = useMemo(() => {
+    const ids = new Set(presenceMembers.map((m) => m.id));
+    // 兜底：成员栏可见即本端在线（presence 数据异常时不误标自己离线）
+    if (ready) ids.add(me.id);
+    return ids;
+  }, [presenceMembers, ready, me.id]);
 
   if (!detail) return null;
 

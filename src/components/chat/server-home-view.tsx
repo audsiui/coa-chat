@@ -1,11 +1,12 @@
 "use client";
 
+import type { PublicUser } from "@/lib/types";
 import { useServerData } from "./server-data-provider";
 import { MemberList } from "./member-list";
 import { Spinner } from "@/components/ui/spinner";
 
 /** 服务器主页：提示选择频道 + 成员列表 */
-export function ServerHomeView() {
+export function ServerHomeView({ me }: { me: PublicUser }) {
   const { detail, loading } = useServerData();
 
   return (
@@ -29,7 +30,7 @@ export function ServerHomeView() {
           </>
         )}
       </div>
-      <MemberList />
+      <MemberList me={me} />
     </div>
   );
 }

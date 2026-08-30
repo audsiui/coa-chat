@@ -56,7 +56,7 @@ export function ChannelView({
         realtimeChannel={`private-channel-${channelId}`}
         emptyHint={`这里是 ${channel.name} 频道的起点，发出第一条消息吧`}
       />
-      <MemberList />
+      <MemberList me={me} />
     </div>
   );
 }
