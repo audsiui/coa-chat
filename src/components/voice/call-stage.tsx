@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMeeting, useParticipant } from "@videosdk.live/react-sdk";
 import { Settings } from "lucide-react";
+import { toast } from "sonner";
 import { toMediaStream } from "./streams";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import type { PublicUser } from "@/lib/types";
@@ -17,6 +18,13 @@ const QUALITY_OPTIONS: Array<{ value: Quality; label: string; hint: string }> = 
   { value: "med", label: "标清", hint: "均衡" },
   { value: "high", label: "高清", hint: "最清晰" },
 ];
+
+/** 发送画质 → 采集约束（用新约束取流后经 changeWebcam 交给 SDK 广播，免重连） */
+const UPSTREAM_PRESETS: Record<Quality, MediaTrackConstraints> = {
+  low: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
+  med: { width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 24 } },
+  high: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+};
 
 /**
  * 视频通话舞台（微信式布局，须渲染在 MeetingHost 内部）：
@@ -70,13 +78,18 @@ export default function CallStage({
 /* ---------------- 通话设置：画质 / 摄像头 / 麦克风 ---------------- */
 
 function CallSettingsPanel() {
-  const { getWebcams, getMics, changeWebcam, changeMic, participants } = useMeeting();
+  const { getWebcams, getMics, changeWebcam, changeMic, participants, localParticipant } =
+    useMeeting();
   const [open, setOpen] = useState(false);
   const [cams, setCams] = useState<WebcamInfo[]>([]);
   const [mics, setMics] = useState<MicInfo[]>([]);
   const [activeCam, setActiveCam] = useState<string | null>(null);
   const [activeMic, setActiveMic] = useState<string | null>(null);
   const [quality, setQualityState] = useState<Quality>("high");
+  /** 我发出的画质："default" 为入会默认，选择后用自定义约束重新采集并替换轨道 */
+  const [upQuality, setUpQuality] = useState<Quality | "default">("default");
+  const [switching, setSwitching] = useState(false);
+  const myStreamRef = useRef<MediaStream | null>(null);
 
   // 画质变化或新的远端加入时，对该远端应用接收画质
   useEffect(() => {
@@ -98,6 +111,33 @@ function CallSettingsPanel() {
   useEffect(() => {
     if (open) void loadDevices();
   }, [open, loadDevices]);
+
+  const applyUpstreamQuality = useCallback(
+    async (q: Quality) => {
+      if (switching) return;
+      setSwitching(true);
+      try {
+        // 用新分辨率约束重新取流，交给 SDK 替换广播轨道（免重连）
+        const stream = await navigator.mediaDevices.getUserMedia({ video: UPSTREAM_PRESETS[q] });
+        await changeWebcam(stream);
+        // 成功后停掉上一条由我们自己创建的旧轨，避免摄像头占用泄漏
+        myStreamRef.current?.getTracks().forEach((t) => t.stop());
+        myStreamRef.current = stream;
+        setUpQuality(q);
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message
+            ? `切换失败：${error.message}`
+            : "切换失败，请重试",
+        );
+      } finally {
+        setSwitching(false);
+      }
+    },
+    [changeWebcam, switching],
+  );
+
+  const camAvailable = localParticipant?.webcamOn ?? false;
 
   return (
     <>
@@ -135,6 +175,42 @@ function CallSettingsPanel() {
                 </button>
               ))}
             </div>
+          </SettingsSection>
+
+          <SettingsSection
+            label={
+              switching
+                ? "画质（发送）— 切换中…"
+                : camAvailable
+                  ? "画质（发送）"
+                  : "画质（发送）— 开启摄像头后可调"
+            }
+          >
+            <div className="flex gap-1.5">
+              {QUALITY_OPTIONS.map((q) => (
+                <button
+                  key={q.value}
+                  type="button"
+                  disabled={!camAvailable || switching}
+                  onClick={() => void applyUpstreamQuality(q.value)}
+                  className={cn(
+                    "flex-1 rounded-lg border px-2 py-1.5 text-center transition-colors",
+                    upQuality === q.value
+                      ? "border-[#7dd3fc] bg-[#7dd3fc]/15"
+                      : "border-white/15 hover:bg-white/10",
+                    (!camAvailable || switching) && "pointer-events-none opacity-40",
+                  )}
+                >
+                  <span className="block font-medium">{q.label}</span>
+                  <span className="block text-[10px] text-white/50">
+                    {q.value === "low" ? "360p" : q.value === "med" ? "540p" : "720p"}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {upQuality === "default" && camAvailable && (
+              <p className="mt-1 text-[10px] text-white/40">当前为入会默认画质</p>
+            )}
           </SettingsSection>
 
           <SettingsSection label="摄像头">
