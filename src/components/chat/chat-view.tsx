@@ -36,6 +36,8 @@ type ChatViewProps = {
   emptyHint?: string;
 };
 
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
 /**
  * 消息视图：本地缓存秒开（IndexedDB）→ 打开时拉最新一页增量校准（按 id 合并）→
  * 实时事件增量写入 → 发送乐观上屏。历史翻页合并不产生重复或缺口。
@@ -52,7 +54,8 @@ export function ChatView({
   emptyHint,
 }: ChatViewProps) {
   const entry = useMessageEntry(fetchUrl);
-  const messages = entry?.messages ?? [];
+  // 空态使用稳定引用，避免派生数组每次渲染变化导致回调依赖抖动
+  const messages = entry?.messages ?? EMPTY_MESSAGES;
   const hasMore = entry?.hasMore ?? true;
   const [fetching, setFetching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
