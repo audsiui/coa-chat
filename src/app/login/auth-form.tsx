@@ -45,7 +45,7 @@ export function AuthForm() {
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-rail via-background to-rail p-4">
-      <div className="w-full max-w-sm rounded-xl bg-card p-6 ring-1 ring-border">
+      <div className="w-full max-w-sm rounded-xl bg-card p-4 ring-1 ring-border sm:p-6">
         <div className="mb-6 flex flex-col items-center gap-2">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-primary text-white">
             <MessagesSquare className="size-6" />

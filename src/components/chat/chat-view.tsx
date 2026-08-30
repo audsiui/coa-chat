@@ -246,7 +246,7 @@ export function ChatView({
                 void send();
               }
             }}
-            className="max-h-40 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="max-h-40 flex-1 resize-none bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
           />
           <Button
             size="icon-sm"
