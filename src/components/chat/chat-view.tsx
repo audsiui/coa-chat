@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -75,6 +77,8 @@ export function ChatView({
   useEffect(() => {
     cacheRef.current = entry;
   });
+  /** 距底部较远（翻历史中）且有新消息到达时显示"回到底部" */
+  const [showJump, setShowJump] = useState(false);
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
@@ -137,7 +141,11 @@ export function ChatView({
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    const nb = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (nb !== nearBottomRef.current) {
+      nearBottomRef.current = nb;
+      setShowJump(!nb);
+    }
     if (el.scrollTop < 80) void loadMore();
   }, [loadMore]);
 
@@ -151,6 +159,7 @@ export function ChatView({
       // 自己的消息：推送确认通常先于 HTTP 响应到达——先清同内容乐观占位，避免双显
       if (msg.author.id === me.id) removePendingMatch(fetchUrl, me.id, msg.content);
       putMessages(fetchUrl, [msg]);
+      if (!nearBottomRef.current) setShowJump(true);
       requestAnimationFrame(() => {
         if (nearBottomRef.current) scrollToBottom(true);
       });
@@ -225,27 +234,31 @@ export function ChatView({
 
   /* ---------------- 渲染（日期分隔 + 连续消息分组） ---------------- */
 
-  const rows: ReactNode[] = [];
-  messages.forEach((m, i) => {
-    const prev = messages[i - 1];
-    if (!prev || !sameDay(prev.createdAt, m.createdAt)) {
-      rows.push(<DayChip key={`day-${m.id}`} label={formatDayLabel(m.createdAt)} />);
-    }
-    const grouped = shouldGroupWithPrevious(
-      prev?.createdAt,
-      prev?.author.id,
-      m.createdAt,
-      m.author.id,
-    );
-    rows.push(
-      <MessageRow
-        key={m.id}
-        message={m}
-        grouped={grouped}
-        mine={m.author.id === me.id}
-      />,
-    );
-  });
+  // 输入草稿变化不重建消息行（rows 仅随消息集变化）
+  const rows: ReactNode[] = useMemo(() => {
+    const list: ReactNode[] = [];
+    messages.forEach((m, i) => {
+      const prev = messages[i - 1];
+      if (!prev || !sameDay(prev.createdAt, m.createdAt)) {
+        list.push(<DayChip key={`day-${m.id}`} label={formatDayLabel(m.createdAt)} />);
+      }
+      const grouped = shouldGroupWithPrevious(
+        prev?.createdAt,
+        prev?.author.id,
+        m.createdAt,
+        m.author.id,
+      );
+      list.push(
+        <MessageRow
+          key={m.id}
+          message={m}
+          grouped={grouped}
+          mine={m.author.id === me.id}
+        />,
+      );
+    });
+    return list;
+  }, [messages, me.id]);
 
   const loading = fetching && !entry;
 
@@ -260,26 +273,40 @@ export function ChatView({
         <div className="ml-auto flex items-center gap-1">{headerActions}</div>
       </header>
 
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="scrollbar-slim relative min-h-0 flex-1 overflow-y-auto px-4 py-4"
-      >
-        {loading ? (
-          <p className="pt-8 text-center text-sm text-muted-foreground">加载中…</p>
-        ) : messages.length === 0 ? (
-          <div className="pt-16 text-center">
-            <p className="text-sm text-muted-foreground">{emptyHint ?? "还没有消息，说点什么吧"}</p>
-          </div>
-        ) : (
-          <>
-            {hasMore && (
-              <p className="mb-3 text-center text-xs text-muted-foreground">
-                {loadingMore ? "正在加载历史消息…" : "上滑加载更多"}
-              </p>
-            )}
-            <div className="flex flex-col gap-0.5">{rows}</div>
-          </>
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="scrollbar-slim relative h-full overflow-y-auto px-4 py-4"
+        >
+          {loading ? (
+            <p className="pt-8 text-center text-sm text-muted-foreground">加载中…</p>
+          ) : messages.length === 0 ? (
+            <div className="pt-16 text-center">
+              <p className="text-sm text-muted-foreground">{emptyHint ?? "还没有消息，说点什么吧"}</p>
+            </div>
+          ) : (
+            <>
+              {hasMore && (
+                <p className="mb-3 text-center text-xs text-muted-foreground">
+                  {loadingMore ? "正在加载历史消息…" : "上滑加载更多"}
+                </p>
+              )}
+              <div className="flex flex-col gap-0.5">{rows}</div>
+            </>
+          )}
+        </div>
+        {showJump && (
+          <button
+            type="button"
+            onClick={() => {
+              scrollToBottom(true);
+              setShowJump(false);
+            }}
+            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground shadow-lg"
+          >
+            ↓ 回到底部
+          </button>
         )}
       </div>
 
@@ -318,7 +345,7 @@ export function ChatView({
   );
 }
 
-function DayChip({ label }: { label: string }) {
+const DayChip = memo(function DayChip({ label }: { label: string }) {
   return (
     <div className="my-3 flex items-center gap-2">
       <span className="h-px flex-1 bg-border" />
@@ -328,9 +355,9 @@ function DayChip({ label }: { label: string }) {
       <span className="h-px flex-1 bg-border" />
     </div>
   );
-}
+});
 
-function MessageRow({
+const MessageRow = memo(function MessageRow({
   message,
   grouped,
   mine,
@@ -382,4 +409,4 @@ function MessageRow({
       </div>
     </div>
   );
-}
+});

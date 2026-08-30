@@ -53,6 +53,16 @@ export function ChatShell({
     setDrawerOpen(false);
   }, [pathname]);
 
+  // Esc 关闭抽屉
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
   const sidebar = activeServerId ? <ServerSidebar me={user} /> : <DmSidebar me={user} />;
 
   return (
