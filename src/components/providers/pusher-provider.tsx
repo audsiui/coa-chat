@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Pusher, { type Channel } from "pusher-js";
+import { toast } from "sonner";
 import { ch, ev } from "@/lib/constants";
 
 const PusherContext = createContext<Pusher | null>(null);
@@ -94,8 +95,17 @@ function UserEventsBus({ userId }: { userId: string }) {
     };
     const handlers = new Map(USER_EVENTS.map((e) => [e, makeHandler(e)] as const));
     handlers.forEach((handler, event) => channel.bind(event, handler));
+
+    // 订阅失败不再静默：直接提示用户刷新（曾导致"来电不弹窗"类问题难排查）
+    const onSubscriptionError = (err: unknown) => {
+      console.error("[pusher] private-user 订阅失败", err);
+      toast.error("实时通道订阅失败，请刷新页面重试");
+    };
+    channel.bind("pusher:subscription_error", onSubscriptionError);
+
     return () => {
       handlers.forEach((handler, event) => channel.unbind(event, handler));
+      channel.unbind("pusher:subscription_error", onSubscriptionError);
     };
   }, [channel]);
 
