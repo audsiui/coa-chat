@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useVoice } from "@/components/voice/voice-provider";
+import { useUnread } from "@/hooks/use-unread";
 import { cn } from "@/lib/utils";
 
 /** 服务器频道侧栏（文字频道 + 语音频道） */
@@ -125,6 +126,8 @@ function SectionLabel({ label, children }: { label: string; children?: React.Rea
 function TextChannelItem({ channel, serverId }: { channel: ChannelDTO; serverId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { channelUnread } = useUnread();
+  const unread = channelUnread[channel.id] ?? 0;
   const active = pathname === `/chat/server/${serverId}/${channel.id}`;
   return (
     <li>
@@ -135,11 +138,18 @@ function TextChannelItem({ channel, serverId }: { channel: ChannelDTO; serverId:
           "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm",
           active
             ? "bg-accent text-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            : unread > 0
+              ? "font-semibold text-foreground hover:bg-accent"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground",
         )}
       >
         <Hash className="size-4 shrink-0 opacity-70" />
         <span className="truncate">{channel.name}</span>
+        {unread > 0 && (
+          <span className="ml-auto flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
       </button>
     </li>
   );

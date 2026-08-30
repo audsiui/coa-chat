@@ -162,6 +162,36 @@ export const messages = pgTable(
   ],
 );
 
+/** 文字频道已读水位（无行 = 全部已读，不回溯历史） */
+export const channelReadStates = pgTable(
+  "channel_read_states",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.channelId] })],
+);
+
+/** 私聊会话已读水位 */
+export const dmReadStates = pgTable(
+  "dm_read_states",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => dmConversations.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.conversationId] })],
+);
+
 /* ------------------------------------------------------------------ */
 /* 私聊（1 对 1，参与人表设计预留将来扩展群聊）                          */
 /* ------------------------------------------------------------------ */

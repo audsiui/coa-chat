@@ -74,6 +74,7 @@ const UserEventsContext = createContext<{
 } | null>(null);
 
 const USER_EVENTS: string[] = [
+  ev.channelNotify,
   ev.dmNew,
   ev.dmRefresh,
   ev.callIncoming,

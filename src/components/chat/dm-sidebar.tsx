@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { ev } from "@/lib/constants";
 import { swrFetcher } from "@/lib/client-api";
 import { useUserEvent } from "@/components/providers/pusher-provider";
+import { useUnread } from "@/hooks/use-unread";
 import type { ConversationDTO, PublicUser } from "@/lib/types";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { StartDmDialog } from "./start-dm-dialog";
@@ -20,6 +21,7 @@ export function DmSidebar({ me }: { me: PublicUser }) {
     "/api/dms",
     swrFetcher,
   );
+  const { dmUnread } = useUnread();
 
   // 新会话或新消息时刷新列表
   useUserEvent(ev.dmNew, () => void mutate());
@@ -54,6 +56,7 @@ export function DmSidebar({ me }: { me: PublicUser }) {
         <ul className="flex flex-col gap-0.5">
           {conversations.map((conv) => {
             const active = pathname === `/chat/dm/${conv.id}`;
+            const unread = dmUnread[conv.id] ?? 0;
             return (
               <li key={conv.id}>
                 <button
@@ -63,7 +66,9 @@ export function DmSidebar({ me }: { me: PublicUser }) {
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5",
                     active
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      : unread > 0
+                        ? "bg-accent/60 text-foreground hover:bg-accent"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
                   <AvatarInitials
@@ -73,16 +78,32 @@ export function DmSidebar({ me }: { me: PublicUser }) {
                   />
                   <span className="min-w-0 flex-1 text-left">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span
+                        className={cn(
+                          "truncate text-sm",
+                          unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground",
+                        )}
+                      >
                         {conv.peer.displayName}
                       </span>
-                      {conv.lastMessage && (
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {formatRelative(conv.lastMessage.createdAt)}
+                      {unread > 0 ? (
+                        <span className="flex min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                          {unread > 9 ? "9+" : unread}
                         </span>
+                      ) : (
+                        conv.lastMessage && (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {formatRelative(conv.lastMessage.createdAt)}
+                          </span>
+                        )
                       )}
                     </span>
-                    <span className="block truncate text-xs">
+                    <span
+                      className={cn(
+                        "block truncate text-xs",
+                        unread > 0 ? "text-foreground/80" : "text-muted-foreground",
+                      )}
+                    >
                       {conv.lastMessage
                         ? `${conv.lastMessage.authorId === me.id ? "我：" : ""}${conv.lastMessage.content}`
                         : "开始聊天吧"}

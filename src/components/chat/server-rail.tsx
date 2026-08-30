@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Home, Plus } from "lucide-react";
 import type { PublicUser, ServerSummary } from "@/lib/types";
 import { swrFetcher } from "@/lib/client-api";
+import { useUnread } from "@/hooks/use-unread";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -22,6 +23,7 @@ export function ServerRail({
   activeServerId: string | null;
 }) {
   const { data: servers = [], mutate } = useSWR<ServerSummary[]>("/api/servers", swrFetcher);
+  const { serverHasUnread } = useUnread();
 
   return (
     <nav className="scrollbar-slim flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3">
@@ -38,6 +40,7 @@ export function ServerRail({
           href={`/chat/server/${s.id}`}
           active={activeServerId === s.id}
           label={s.name}
+          dot={Boolean(serverHasUnread[s.id])}
           content={<AvatarInitials name={s.name} color={s.iconColor} size="sm" />}
         />
       ))}
@@ -61,11 +64,13 @@ function RailItem({
   active,
   label,
   content,
+  dot = false,
 }: {
   href: string;
   active: boolean;
   label: string;
   content: React.ReactNode;
+  dot?: boolean;
 }) {
   return (
     <Tooltip>
@@ -75,13 +80,19 @@ function RailItem({
           <Link
             href={href as Route}
             className={cn(
-              "flex size-12 items-center justify-center rounded-2xl transition-all hover:rounded-xl",
+              "relative flex size-12 items-center justify-center rounded-2xl transition-all hover:rounded-xl",
               active
                 ? "rounded-xl bg-primary text-white"
                 : "bg-secondary text-secondary-foreground hover:bg-primary hover:text-white",
             )}
           >
             {content}
+            {dot && !active && (
+              <span
+                aria-hidden
+                className="absolute right-1 bottom-1 size-2.5 rounded-full bg-destructive ring-2 ring-rail"
+              />
+            )}
           </Link>
         }
       />

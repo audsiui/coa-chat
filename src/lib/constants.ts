@@ -35,6 +35,7 @@ export const ch = {
 
 export const ev = {
   messageNew: "message:new",
+  channelNotify: "channel:notify",
   dmNew: "dm:new",
   dmRefresh: "dm:refresh",
   micState: "mic:state",

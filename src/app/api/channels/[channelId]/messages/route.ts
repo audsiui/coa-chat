@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, lt } from "drizzle-orm";
 import { getDb } from "@/db";
-import { messages, users } from "@/db/schema";
+import { messages, serverMembers, users } from "@/db/schema";
 import { ApiError, ok, parseJson, paramsOf, toErrorResponse } from "@/lib/api";
 import { assertChannelAccess } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
@@ -103,6 +103,21 @@ export async function POST(req: Request, ctx: RouteCtx) {
     };
 
     await triggerSafely(ch.channel(channelId), ev.messageNew, message);
+
+    // 未读通知：发给该服务器所有成员（除作者）的轻量事件；正在看该频道/离线的人由客户端与服务端水位自愈
+    const memberRows = await db
+      .select({ userId: serverMembers.userId })
+      .from(serverMembers)
+      .where(eq(serverMembers.serverId, channel.serverId));
+    for (const member of memberRows) {
+      if (member.userId === me.id) continue;
+      await triggerSafely(ch.user(member.userId), ev.channelNotify, {
+        channelId,
+        serverId: channel.serverId,
+        messageId: message.id,
+        senderName: me.displayName,
+      });
+    }
 
     return ok(message, 201);
   } catch (error) {

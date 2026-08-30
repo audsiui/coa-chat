@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { PublicUser } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PusherProvider } from "@/components/providers/pusher-provider";
+import { UnreadProvider } from "@/hooks/use-unread";
 import { VoiceProvider } from "@/components/voice/voice-provider";
 import { CallProvider } from "@/components/voice/call-provider";
 import { Button } from "@/components/ui/button";
@@ -56,8 +57,9 @@ export function ChatShell({
 
   return (
     <PusherProvider userId={user.id}>
-      <VoiceProvider me={user}>
-        <CallProvider me={user}>
+      <UnreadProvider>
+        <VoiceProvider me={user}>
+          <CallProvider me={user}>
           {/* Provider 必须同时覆盖侧栏与 main 区域——页面组件也消费 useServerData */}
           <ServerDataProvider serverId={activeServerId}>
             <div className="flex h-dvh w-full overflow-hidden">
@@ -103,8 +105,9 @@ export function ChatShell({
               </div>
             </div>
           </ServerDataProvider>
-        </CallProvider>
-      </VoiceProvider>
+          </CallProvider>
+        </VoiceProvider>
+      </UnreadProvider>
     </PusherProvider>
   );
 }
