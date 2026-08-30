@@ -48,7 +48,7 @@ function VideoCallLayout({ me }: { me: PublicUser }) {
             onLeft={ctx.onMeetingLeft}
             onControls={ctx.registerControls}
           >
-            <CallStage camOn={ctx.camOn} peer={call.peer} meName={me.displayName} />
+            <CallStage camOn={ctx.camOn} peer={call.peer} meName={me.displayName} meColor={me.avatarColor} />
           </MeetingHost>
         )}
 

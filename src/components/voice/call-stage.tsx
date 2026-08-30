@@ -15,15 +15,18 @@ export default function CallStage({
   camOn,
   peer,
   meName,
+  meColor,
 }: {
   camOn: boolean;
   peer: PublicUser;
   meName: string;
+  meColor: string;
 }) {
   const { participants } = useMeeting();
   const entries = [...participants.values()];
-  const remote = entries.find((p) => !p.isLocal);
-  const local = entries.find((p) => p.isLocal);
+  // participants 集合的元素用 local 字段（useParticipant 钩子才是 isLocal）
+  const remote = entries.find((p) => !p.local);
+  const local = entries.find((p) => p.local);
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0b0c0e]">
@@ -40,7 +43,7 @@ export default function CallStage({
           <LocalVideo participantId={local.id} />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5">
-            <AvatarInitials name={meName} color={me.avatarColor} size="sm" />
+            <AvatarInitials name={meName} color={meColor} size="sm" />
             <span className="text-[11px] text-white/50">摄像头已关闭</span>
           </div>
         )}
