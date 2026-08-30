@@ -77,8 +77,6 @@ function CallSettingsPanel() {
   const [activeCam, setActiveCam] = useState<string | null>(null);
   const [activeMic, setActiveMic] = useState<string | null>(null);
   const [quality, setQualityState] = useState<Quality>("high");
-  const qualityRef = useRef<Quality>("high");
-  qualityRef.current = quality;
 
   // 画质变化或新的远端加入时，对该远端应用接收画质
   useEffect(() => {
