@@ -49,6 +49,8 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
 
   const controlsRef = useRef<MeetingControls | null>(null);
   const busyRef = useRef(false);
+  /** join 代际号：leave/卸载时自增，使进行中的 join 异步续段全部作废 */
+  const joinGenRef = useRef(0);
   const syncTimerRef = useRef<number | null>(null);
   // 主动离开/切换房间时置位：MeetingHost 卸载触发的 onLeft 不应被当作断连
   const suppressNextLeftRef = useRef(false);
@@ -98,9 +100,10 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
     }, 5000);
   }, []);
 
-  // 布局卸载（退出登录等）：停心跳并尽力离房，防止幽灵占用
+  // 布局卸载（退出登录等）：作废进行中的 join、停心跳并尽力离房，防止幽灵占用
   useEffect(() => {
     return () => {
+      joinGenRef.current += 1;
       stopSync();
       void api.post("/api/voice/leave", undefined, { keepalive: true }).catch(() => {});
     };
@@ -113,6 +116,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
       if (busyRef.current) return;
       if (channel?.id === target.id) return;
       busyRef.current = true;
+      const gen = ++joinGenRef.current;
 
       // 切换房间：标记主动离开，清掉旧状态（MeetingHost 卸载时自动退会）
       markSuppressed();
@@ -128,16 +132,19 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
           const state = await api.post<{ members: VoiceMember[] }>("/api/voice/join", {
             channelId: target.id,
           });
+          if (gen !== joinGenRef.current) return;
           setRoomMembers(state.members);
           startSync(target.id);
 
           const room = await api.post<RtcRoomResult>("/api/rtc/rooms", {
             channelId: target.id,
           });
+          if (gen !== joinGenRef.current) return;
           if (room.rtcConfigured && room.meetingId) {
             const { token } = await api.post<{ token: string }>("/api/rtc/token", {
               meetingId: room.meetingId,
             });
+            if (gen !== joinGenRef.current) return;
             setMeeting({ meetingId: room.meetingId, token });
             // status 保持 connecting，onJoined 后转 live
           } else {
@@ -145,6 +152,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
             toast.info("VideoSDK 未配置：已进入仅在线模式（无实际音频）");
           }
         } catch (error) {
+          if (gen !== joinGenRef.current) return;
           // 失败回滚：清状态行 + 停心跳
           stopSync();
           setRoomMembers([]);
@@ -153,7 +161,7 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
           setStatus("error");
           toast.error(error instanceof Error ? error.message : "加入语音房失败");
         } finally {
-          busyRef.current = false;
+          if (gen === joinGenRef.current) busyRef.current = false;
         }
       })();
     },
@@ -161,6 +169,9 @@ export function VoiceProvider({ me, children }: { me: PublicUser; children: Reac
   );
 
   const leave = useCallback(() => {
+    // 作废进行中的 join 续段并放行后续操作
+    joinGenRef.current += 1;
+    busyRef.current = false;
     markSuppressed();
     controlsRef.current?.leave();
     controlsRef.current = null;

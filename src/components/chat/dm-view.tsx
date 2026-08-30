@@ -59,6 +59,7 @@ export function DmView({
   return (
     <div className="flex min-w-0 flex-1">
       <ChatView
+        key={conversationId}
         me={me}
         title={peer.displayName}
         titleIcon={

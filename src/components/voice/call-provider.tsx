@@ -74,6 +74,22 @@ export function CallProvider({ me, children }: { me: PublicUser; children: React
     setStartedAt(null);
   }, []);
 
+  // 页面关闭/布局卸载（登出等）：尽力终结通话，否则对端响铃或"通话中"永久挂死
+  useEffect(() => {
+    const terminate = () => {
+      const c = callRef.current;
+      if (!c) return;
+      void api
+        .post(`/api/calls/${c.callId}/end`, { peerUserId: c.peer.id }, { keepalive: true })
+        .catch(() => {});
+    };
+    window.addEventListener("pagehide", terminate);
+    return () => {
+      window.removeEventListener("pagehide", terminate);
+      terminate();
+    };
+  }, []);
+
   /* ---------------- 信令事件 ---------------- */
 
   useUserEvent<IncomingPayload>(ev.callIncoming, (d) => {
@@ -118,6 +134,22 @@ export function CallProvider({ me, children }: { me: PublicUser; children: React
       clear();
     }
   });
+
+  /* ---------------- 被叫响铃超时（主叫可能已崩溃，无 end 信令可收） ---------------- */
+
+  useEffect(() => {
+    if (call?.phase !== "ringing" || call.role !== "callee") return;
+    const timer = window.setTimeout(() => {
+      const c = callRef.current;
+      if (c?.phase !== "ringing" || c.role !== "callee") return;
+      toast.info("未响应，已自动挂断");
+      void api
+        .post(`/api/calls/${c.callId}/respond`, { toUserId: c.peer.id, action: "reject" })
+        .catch(() => {});
+      clear();
+    }, 60_000);
+    return () => window.clearTimeout(timer);
+  }, [call?.phase, call?.role, call?.callId, clear]);
 
   /* ---------------- 主叫 45 秒无应答自动取消 ---------------- */
 

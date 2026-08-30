@@ -47,6 +47,7 @@ export function ChannelView({
   return (
     <div className="flex min-w-0 flex-1">
       <ChatView
+        key={channelId}
         me={me}
         title={channel.name}
         titleIcon={<Hash className="size-5 shrink-0 text-muted-foreground" />}
