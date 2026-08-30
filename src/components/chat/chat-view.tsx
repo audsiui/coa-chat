@@ -121,7 +121,7 @@ export function ChatView({
     const anchorId = messages[0]?.id ?? null;
     try {
       const oldest = messages[0]!;
-      const url = `${fetchUrl}${fetchUrl.includes("?") ? "&" : "?"}before=${encodeURIComponent(oldest.createdAt)}`;
+      const url = `${fetchUrl}${fetchUrl.includes("?") ? "&" : "?"}before=${encodeURIComponent(oldest.createdAt)}&beforeId=${encodeURIComponent(oldest.id)}`;
       const data = await api.get<{ messages: ChatMessage[]; hasMore: boolean }>(url);
       putMessages(fetchUrl, data.messages, data.hasMore);
       requestAnimationFrame(() => {
@@ -274,11 +274,14 @@ export function ChatView({
       </header>
 
       <div className="relative min-h-0 flex-1">
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="scrollbar-slim relative h-full overflow-y-auto px-4 py-4"
-        >
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        role="log"
+        aria-live="polite"
+        aria-label="消息记录"
+        className="scrollbar-slim relative h-full overflow-y-auto px-4 py-4"
+      >
           {loading ? (
             <p className="pt-8 text-center text-sm text-muted-foreground">加载中…</p>
           ) : messages.length === 0 ? (

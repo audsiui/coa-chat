@@ -248,15 +248,17 @@ export const dmMessages = pgTable(
 
 /* ------------------------------------------------------------------ */
 /* 语音房占用状态（谁在哪个语音频道）                                    */
-/* 每用户至多一行（主键 user_id）；靠心跳保活，超时由服务端清扫          */
+/* 每用户每个浏览器标签一行（client_session 由 sessionStorage 生成）；   */
+/* 靠心跳保活，超时由服务端清扫；新会话加入时作废旧会话行（单点接入）     */
 /* ------------------------------------------------------------------ */
 
 export const voiceStates = pgTable(
   "voice_states",
   {
     userId: uuid("user_id")
-      .primaryKey()
+      .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    clientSession: text("client_session").notNull().default(""),
     channelId: uuid("channel_id")
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
@@ -267,6 +269,7 @@ export const voiceStates = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    primaryKey({ columns: [t.userId, t.clientSession] }),
     index("voice_states_server_idx").on(t.serverId),
     index("voice_states_channel_idx").on(t.channelId),
     index("voice_states_updated_idx").on(t.updatedAt),

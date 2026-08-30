@@ -23,11 +23,17 @@ export async function POST(req: Request) {
     const channel = await assertChannelAccess(body.channelId, me.id);
     const db = getDb();
 
-    // 只更新在场者的状态行；不在场则忽略
+    // 只更新本会话在场的状态行；不在场则忽略
     await db
       .update(voiceStates)
       .set({ micOn: body.micOn, updatedAt: new Date() })
-      .where(and(eq(voiceStates.userId, me.id), eq(voiceStates.channelId, channel.id)));
+      .where(
+        and(
+          eq(voiceStates.userId, me.id),
+          eq(voiceStates.clientSession, body.sessionId),
+          eq(voiceStates.channelId, channel.id),
+        ),
+      );
 
     await triggerSafely(ch.server(channel.serverId), ev.micState, {
       serverId: channel.serverId,

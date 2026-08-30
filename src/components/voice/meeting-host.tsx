@@ -18,6 +18,7 @@ type MeetingHostProps = {
   camOn?: boolean;
   onJoined?: () => void;
   onLeft?: () => void;
+  onJoinError?: () => void;
   onControls?: (controls: MeetingControls) => void;
   children?: React.ReactNode;
 };
@@ -26,11 +27,13 @@ type MeetingHostProps = {
 function JoinAndRegister({
   onJoined,
   onLeft,
+  onJoinError,
   onControls,
-}: Pick<MeetingHostProps, "onJoined" | "onLeft" | "onControls">) {
+}: Pick<MeetingHostProps, "onJoined" | "onLeft" | "onControls" | "onJoinError">) {
   const { leave, toggleMic, toggleWebcam } = useMeeting({
     onMeetingJoined: onJoined,
     onMeetingLeft: onLeft,
+    onError: onJoinError,
   });
   const methodsRef = useRef({ leave, toggleMic, toggleWebcam });
 
@@ -121,7 +124,12 @@ export default function MeetingHost({
       token={token}
       joinWithoutUserInteraction
     >
-      <JoinAndRegister onJoined={onJoined} onLeft={onLeft} onControls={onControls} />
+      <JoinAndRegister
+        onJoined={onJoined}
+        onLeft={onLeft}
+        onJoinError={onJoinError}
+        onControls={onControls}
+      />
       <AudioLayer />
       {children}
     </MeetingProvider>

@@ -31,7 +31,13 @@ export async function POST(req: Request) {
         throw new ApiError(409, "NOT_VOICE_CHANNEL", "该频道不是语音频道");
       }
 
-      if (channel.rtcRoomId) {
+      // 强制轮换：加入旧房失败后由客户端触发（旧房疑似已被 VideoSDK 回收）
+      if (body.rotate) {
+        await getDb()
+          .update(channels)
+          .set({ rtcRoomId: null, updatedAt: new Date() })
+          .where(eq(channels.id, channel.id));
+      } else if (channel.rtcRoomId) {
         const data: RtcRoomResult = { rtcConfigured: true, meetingId: channel.rtcRoomId };
         return ok(data);
       }

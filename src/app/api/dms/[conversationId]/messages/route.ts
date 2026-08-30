@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { dmConversations, dmMessages, dmParticipants, users } from "@/db/schema";
 import { ApiError, ok, parseJson, toErrorResponse } from "@/lib/api";
@@ -31,8 +31,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
       isNull(dmMessages.deletedAt),
     ];
     if (query.before) {
-      // 同频道消息路由：lte 防同毫秒截断，客户端按 id 去重
-      conditions.push(lte(dmMessages.createdAt, new Date(query.before)));
+      const cursorAt = new Date(query.before);
+      if (query.beforeId) {
+        // (created_at, id) 复合游标：同毫秒多条消息不丢页、不空转
+        conditions.push(
+          or(
+            lt(dmMessages.createdAt, cursorAt),
+            and(eq(dmMessages.createdAt, cursorAt), lt(dmMessages.id, query.beforeId)),
+          ),
+        );
+      } else {
+        conditions.push(lte(dmMessages.createdAt, cursorAt));
+      }
     }
 
     const rows = await db
@@ -50,7 +60,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .from(dmMessages)
       .innerJoin(users, eq(users.id, dmMessages.authorId))
       .where(and(...conditions))
-      .orderBy(desc(dmMessages.createdAt))
+      .orderBy(desc(dmMessages.createdAt), desc(dmMessages.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;

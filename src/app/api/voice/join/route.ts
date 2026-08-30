@@ -11,8 +11,8 @@ import {
 import { voiceJoinSchema } from "@/lib/validators";
 
 /**
- * POST /api/voice/join —— 进入语音房：落库占用状态并全服务器广播。
- * 侧栏/面板的语音名单以此为准（DB + 心跳过期），不再依赖 presence 幻影订阅。
+ * POST /api/voice/join —— 进入语音房：落库占用状态并广播。
+ * 状态行按 (用户, 客户端会话) 键控；新会话加入会作废同一用户的旧会话行（单点接入）。
  */
 export async function POST(req: Request) {
   try {
@@ -27,12 +27,15 @@ export async function POST(req: Request) {
     }
 
     await sweepAndBroadcast();
-    const { prevServerId } = await upsertVoiceState(me.id, channel.id, channel.serverId);
+    const affectedServers = await upsertVoiceState(
+      me.id,
+      body.sessionId,
+      channel.id,
+      channel.serverId,
+    );
 
-    // 新旧服务器都要刷新名单（跨服务器切换房间时旧服务器需要看到你离开）
-    await broadcastServerVoiceStates(channel.serverId);
-    if (prevServerId && prevServerId !== channel.serverId) {
-      await broadcastServerVoiceStates(prevServerId);
+    for (const serverId of affectedServers) {
+      await broadcastServerVoiceStates(serverId);
     }
 
     return ok({ members: await listChannelVoiceMembers(channel.id) });

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, lte, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { messages, serverMembers, users } from "@/db/schema";
 import { ApiError, ok, parseJson, paramsOf, toErrorResponse } from "@/lib/api";
@@ -28,8 +28,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const db = getDb();
     const conditions = [eq(messages.channelId, channelId), isNull(messages.deletedAt)];
     if (query.before) {
-      // lte 而非 lt：同毫秒消息不因游标截断丢失，客户端按 id 合并去重
-      conditions.push(lte(messages.createdAt, new Date(query.before)));
+      const cursorAt = new Date(query.before);
+      if (query.beforeId) {
+        // (created_at, id) 复合游标：同毫秒多条消息不丢页、不空转
+        conditions.push(
+          or(
+            lt(messages.createdAt, cursorAt),
+            and(eq(messages.createdAt, cursorAt), lt(messages.id, query.beforeId)),
+          ),
+        );
+      } else {
+        conditions.push(lte(messages.createdAt, cursorAt));
+      }
     }
 
     const rows = await db
@@ -47,7 +57,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .from(messages)
       .innerJoin(users, eq(users.id, messages.authorId))
       .where(and(...conditions))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(messages.createdAt), desc(messages.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;

@@ -76,7 +76,9 @@ export async function GET() {
       })
       .from(dmConversations)
       .where(sql`${dmConversations.id} IN (${idList})`)
-      .orderBy(sql`${dmConversations.lastMessageAt} DESC NULLS LAST`);
+      .orderBy(
+        sql`COALESCE(${dmConversations.lastMessageAt}, ${dmConversations.createdAt}) DESC`,
+      );
 
     const data: ConversationDTO[] = convRows
       .map((conv) => {

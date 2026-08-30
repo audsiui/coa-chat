@@ -57,6 +57,8 @@ export const openDmSchema = z.object({
 
 export const rtcRoomSchema = z.object({
   channelId: z.string().uuid().optional(),
+  /** 语音房加入失败后强制轮换房间（旧房疑似已失效） */
+  rotate: z.boolean().optional(),
 });
 
 export const rtcTokenSchema = z.object({
@@ -65,24 +67,28 @@ export const rtcTokenSchema = z.object({
 
 export const voiceJoinSchema = z.object({
   channelId: z.string().uuid(),
+  sessionId: z.string().min(8).max(64),
 });
 
 export const voiceSyncSchema = z.object({
   channelId: z.string().uuid(),
+  sessionId: z.string().min(8).max(64),
 });
 
 export const voiceLeaveSchema = z.object({
-  channelId: z.string().uuid().optional(),
+  sessionId: z.string().min(8).max(64),
 });
 
 export const micStateSchema = z.object({
   channelId: z.string().uuid(),
+  sessionId: z.string().min(8).max(64),
   micOn: z.boolean(),
 });
 
-export const callStartSchema = z.object({
-  toUserId: z.string().uuid(),
-  kind: z.enum(["audio", "video"]),
+export const paginationSchema = z.object({
+  before: z.string().datetime().optional(),
+  beforeId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 export const callRespondSchema = z.object({

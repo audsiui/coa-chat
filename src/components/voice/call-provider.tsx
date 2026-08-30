@@ -230,13 +230,14 @@ export function CallProvider({ me, children }: { me: PublicUser; children: React
 
   const accept = useCallback(async () => {
     const c = callRef.current;
-    if (!c || c.role !== "callee") return;
+    // 先行置为 connecting：既是状态转移，也天然防双击重复应答
+    if (!c || c.role !== "callee" || c.phase !== "ringing") return;
+    setCall({ ...c, phase: "connecting" });
     try {
       await api.post(`/api/calls/${c.callId}/respond`, {
         toUserId: c.peer.id,
         action: "accept",
       });
-      setCall({ ...c, phase: "connecting" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "接听失败");
       clear();
