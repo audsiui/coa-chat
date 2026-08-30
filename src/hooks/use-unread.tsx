@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 import { api } from "@/lib/client-api";
 import { ev } from "@/lib/constants";
 import { playNotifySound } from "@/lib/sound";
-import { useUserEvent } from "@/components/providers/pusher-provider";
+import { usePusher, useUserEvent } from "@/components/providers/pusher-provider";
 
 type UnreadContextValue = {
   /** 文字频道未读：channelId -> count */
@@ -108,6 +108,52 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [markChannelRead, markDmRead]);
+
+  // Pusher 断线重连后刷新权威未读快照（掉线期间的事件与离线消息一并补齐；
+  // 与本地计数取较大值——快照之后到达的事件增量不被覆盖）
+  const pusher = usePusher();
+  useEffect(() => {
+    if (!pusher) return;
+    let everConnected = false;
+    const onStateChange = ({ current }: { current: string }) => {
+      if (current !== "connected") return;
+      if (everConnected) {
+        void (async () => {
+          try {
+            const data = await api.get<{
+              channels: Array<{ id: string; serverId: string; count: number }>;
+              dms: Array<{ id: string; count: number }>;
+            }>("/api/unread");
+            setChannelServer((prev) => ({
+              ...prev,
+              ...Object.fromEntries(data.channels.map((c) => [c.id, c.serverId])),
+            }));
+            setChannelUnread((prev) => {
+              const next = { ...prev };
+              for (const c of data.channels) {
+                next[c.id] = Math.max(prev[c.id] ?? 0, c.count);
+              }
+              return next;
+            });
+            setDmUnread((prev) => {
+              const next = { ...prev };
+              for (const d of data.dms) {
+                next[d.id] = Math.max(prev[d.id] ?? 0, d.count);
+              }
+              return next;
+            });
+          } catch {
+            /* 静默，下次重连或刷新自愈 */
+          }
+        })();
+      }
+      everConnected = true;
+    };
+    pusher.connection.bind("state_change", onStateChange);
+    return () => {
+      pusher.connection.unbind("state_change", onStateChange);
+    };
+  }, [pusher]);
 
   // 频道新消息通知
   useUserEvent<{ channelId: string; serverId: string }>(ev.channelNotify, (d) => {

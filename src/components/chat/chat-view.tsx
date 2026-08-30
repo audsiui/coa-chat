@@ -18,7 +18,7 @@ import {
   shouldGroupWithPrevious,
 } from "@/lib/format";
 import { putMessages, removeMessage, useMessageEntry } from "@/lib/message-store";
-import { usePusherChannel } from "@/components/providers/pusher-provider";
+import { usePusher, usePusherChannel } from "@/components/providers/pusher-provider";
 import type { ChatMessage, PublicUser } from "@/lib/types";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { Button } from "@/components/ui/button";
@@ -153,6 +153,31 @@ export function ChatView({
       channel.unbind(ev.messageNew, handler);
     };
   }, [channel, fetchUrl, scrollToBottom]);
+
+  // Pusher 断线重连后补拉最新一页（掉线期间推送丢失的消息由按 id 合并自动补齐）
+  const pusher = usePusher();
+  useEffect(() => {
+    if (!pusher) return;
+    let everConnected = false;
+    const onStateChange = ({ current }: { current: string }) => {
+      if (current !== "connected") return;
+      if (everConnected) {
+        void (async () => {
+          try {
+            const data = await api.get<{ messages: ChatMessage[]; hasMore: boolean }>(fetchUrl);
+            putMessages(fetchUrl, data.messages, data.hasMore);
+          } catch {
+            /* 静默，下个事件或刷新自愈 */
+          }
+        })();
+      }
+      everConnected = true;
+    };
+    pusher.connection.bind("state_change", onStateChange);
+    return () => {
+      pusher.connection.unbind("state_change", onStateChange);
+    };
+  }, [pusher, fetchUrl]);
 
   /* ---------------- 发送（乐观上屏） ---------------- */
 

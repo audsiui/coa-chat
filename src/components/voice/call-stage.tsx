@@ -91,6 +91,12 @@ function CallSettingsPanel() {
   const [switching, setSwitching] = useState(false);
   const myStreamRef = useRef<MediaStream | null>(null);
 
+  // useMeeting 方法引用逐渲染变化：走 ref 保持 loadDevices 稳定，避免面板打开时请求循环
+  const meetingRef = useRef({ getWebcams, getMics, changeWebcam, changeMic });
+  useEffect(() => {
+    meetingRef.current = { getWebcams, getMics, changeWebcam, changeMic };
+  });
+
   // 画质变化或新的远端加入时，对该远端应用接收画质
   useEffect(() => {
     participants.forEach((p) => {
@@ -100,13 +106,16 @@ function CallSettingsPanel() {
 
   const loadDevices = useCallback(async () => {
     try {
-      const [webcamList, micList] = await Promise.all([getWebcams(), getMics()]);
+      const [webcamList, micList] = await Promise.all([
+        meetingRef.current.getWebcams(),
+        meetingRef.current.getMics(),
+      ]);
       setCams(webcamList);
       setMics(micList);
     } catch {
       /* 设备枚举失败时面板显示空列表 */
     }
-  }, [getWebcams, getMics]);
+  }, []);
 
   useEffect(() => {
     if (open) void loadDevices();
