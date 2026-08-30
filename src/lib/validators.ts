@@ -42,11 +42,6 @@ export const sendMessageSchema = z.object({
   content: z.string().trim().min(1, "消息不能为空").max(4000, "消息最多 4000 字"),
 });
 
-export const paginationSchema = z.object({
-  before: z.string().datetime().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-});
-
 /* ---------------- 私聊 ---------------- */
 
 export const openDmSchema = z.object({
