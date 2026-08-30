@@ -33,8 +33,7 @@ export function PusherProvider({
 
   return (
     <PusherContext.Provider value={client}>
-      <UserEventsBus userId={userId} />
-      {children}
+      <UserEventsBus userId={userId}>{children}</UserEventsBus>
     </PusherContext.Provider>
   );
 }
@@ -84,7 +83,7 @@ const USER_EVENTS: string[] = [
   ev.callEnded,
 ];
 
-function UserEventsBus({ userId }: { userId: string }) {
+function UserEventsBus({ userId, children }: { userId: string; children: React.ReactNode }) {
   const channel = usePusherChannel(ch.user(userId));
   const listenersRef = useRef(new Map<string, Set<Listener>>());
 
@@ -126,7 +125,8 @@ function UserEventsBus({ userId }: { userId: string }) {
     [],
   );
 
-  return <UserEventsContext.Provider value={value}>{null}</UserEventsContext.Provider>;
+  // 关键：children 必须在 Provider 内部，否则 useUserEvent 拿到的 bus 恒为 null
+  return <UserEventsContext.Provider value={value}>{children}</UserEventsContext.Provider>;
 }
 
 /** 订阅发给我的用户级事件（私聊刷新、通话信令等） */
