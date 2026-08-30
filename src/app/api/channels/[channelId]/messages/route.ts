@@ -75,7 +75,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
   try {
     const me = await requireUser();
     const { channelId } = await paramsOf(ctx.params);
-    await assertChannelAccess(channelId, me.id);
+    const channel = await assertChannelAccess(channelId, me.id);
     if (!rateLimit(`msg:${clientIp(req)}:${me.id}`, 30, 60_000)) {
       throw new ApiError(429, "RATE_LIMITED", "发送太频繁，请稍后再试");
     }
