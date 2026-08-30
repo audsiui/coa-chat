@@ -19,7 +19,7 @@ export function AvatarInitials({
   size?: keyof typeof SIZES;
   className?: string;
 }) {
-  const initial = name.trim()?.[0]?.toUpperCase() ?? "?";
+  const initial = name?.trim()?.[0]?.toUpperCase() ?? "?";
   return (
     <div
       aria-label={name}

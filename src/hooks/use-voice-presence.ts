@@ -6,8 +6,16 @@ import { ch, ev } from "@/lib/constants";
 import { api } from "@/lib/client-api";
 import type { VoiceMember } from "@/lib/types";
 
-type MemberAddedData = { id: string; displayName: string; avatarColor: string };
+type MemberInfo = { displayName: string; avatarColor: string };
 type MicStateData = { userId: string; micOn: boolean };
+
+/** pusher-js 的成员对象：{ id, info: {...user_info} }（旧版本为平铺），此处两种形态都兼容 */
+function parseMember(data: unknown): { id: string; info: MemberInfo } | null {
+  const d = data as { id?: string; info?: MemberInfo } & Partial<MemberInfo>;
+  const info = d.info ?? d;
+  if (!d.id || !info?.displayName) return null;
+  return { id: d.id, info: { displayName: info.displayName, avatarColor: info.avatarColor ?? "#5865f2" } };
+}
 
 /**
  * 语音频道的在线名单（Pusher presence）+ 麦克风状态（服务端中转广播）。
@@ -27,18 +35,18 @@ export function useVoicePresence(channelId: string | null): {
     }
 
     const onAdded = (data: unknown) => {
-      const d = data as MemberAddedData;
+      const parsed = parseMember(data);
+      if (!parsed) return;
+      const { id, info } = parsed;
       setMembers((list) =>
-        list.some((m) => m.id === d.id)
+        list.some((m) => m.id === id)
           ? list
-          : [
-              ...list,
-              { id: d.id, displayName: d.displayName, avatarColor: d.avatarColor, micOn: true },
-            ],
+          : [...list, { id, displayName: info.displayName, avatarColor: info.avatarColor, micOn: true }],
       );
     };
     const onRemoved = (data: unknown) => {
-      const d = data as { id: string };
+      const d = data as { id?: string };
+      if (!d.id) return;
       setMembers((list) => list.filter((m) => m.id !== d.id));
     };
     const onMic = (data: unknown) => {
